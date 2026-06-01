@@ -1,4 +1,4 @@
-FROM golang:1.26 AS go-builder
+FROM --platform=$BUILDPLATFORM golang:1.26 AS go-builder
 WORKDIR /app
 ARG TARGETOS
 ARG TARGETARCH
