@@ -41,7 +41,7 @@ func (c *Client) CallCompletion(ctx context.Context, a *auth.RequestAuth, payloa
 		body, _ := io.ReadAll(resp.Body)
 		if c.Auth != nil && a != nil {
 			if resp.StatusCode == http.StatusTooManyRequests {
-				c.Auth.MarkAccountCooldown(a.AccountID, 3*time.Minute)
+				c.Auth.MarkAccountCooldown(a.AccountID, 2*time.Minute)
 			}
 			c.Auth.TryAutoDiscardFromHTTPBody(ctx, a, body)
 			if a.UseConfigToken && c.Auth.SwitchAccount(ctx, a) {

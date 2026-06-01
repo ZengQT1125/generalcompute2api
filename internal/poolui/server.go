@@ -14,6 +14,7 @@ import (
 
 	"generalcompute2api/internal/config"
 	"generalcompute2api/internal/pooldb"
+	"generalcompute2api/internal/version"
 )
 
 type Server struct {
@@ -46,6 +47,7 @@ func NewServer(db *pooldb.DB) (*Server, error) {
 
 	r.Route("/api", func(ar chi.Router) {
 		ar.Use(s.requireAuth)
+		ar.Get("/version", s.getVersion)
 		ar.Get("/keys", s.listKeys)
 		ar.Post("/keys", s.createKey)
 		ar.Post("/keys/rotate", s.rotateKey)
@@ -413,6 +415,14 @@ func (s *Server) restoreAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "discarded": false})
+}
+
+func (s *Server) getVersion(w http.ResponseWriter, r *http.Request) {
+	v := version.BuildVersion
+	if v == "" {
+		v = "v2.2.0"
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"version": v})
 }
 
 func writeErr(w http.ResponseWriter, err error) {

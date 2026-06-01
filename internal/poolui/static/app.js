@@ -623,7 +623,7 @@ function renderAccounts() {
       tr.classList.add("row-ok");
     }
     tr.innerHTML = `
-      <td>${a.position}</td>
+      <td>${a.position + 1}</td>
       <td>${escapeHtml(a.identifier)}</td>
       <td>${escapeHtml(a.token_preview || (a.has_token ? "有" : "—"))}</td>
       <td>${poolStatusHTML(a)}</td>
@@ -897,6 +897,7 @@ $("#loginForm").addEventListener("submit", async (e) => {
     sessionStorage.setItem(TOKEN_KEY, state.token);
     showApp();
     await loadKeys();
+    await loadVersion();
     toast("登录成功");
   } catch (err) {
     state.token = "";
@@ -1116,12 +1117,24 @@ $("#btnPageLast").addEventListener("click", () => {
   }
 });
 
+async function loadVersion() {
+  try {
+    const data = await api("/api/version");
+    const el = $("#versionBadge");
+    if (el) el.textContent = data.version || "v2.2.0";
+  } catch (_) {
+    const el = $("#versionBadge");
+    if (el) el.textContent = "v2.2.0";
+  }
+}
+
 async function init() {
   if (state.token) {
     try {
       await api("/api/keys");
       showApp();
       await loadKeys();
+      await loadVersion();
       return;
     } catch (_) {
       state.token = "";
