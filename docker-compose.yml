@@ -14,7 +14,7 @@ services:
       target: final
     image: generalcompute2api:latest
     ports:
-      - "${GENERALCOMPUTE2API_HOST_PORT:-8000}:8000"
+      - "${GENERALCOMPUTE2API_HOST_PORT:-7999}:8000"
     environment:
       PORT: "8000"
       GENERALCOMPUTE2API_DATABASE_PATH: /data/generalcompute2api.db
@@ -22,6 +22,8 @@ services:
       - .env
     volumes:
       - ./docker-data/generalcompute2api:/data
+    networks:
+      - generalcompute_net
     healthcheck:
       test:
         [
@@ -36,3 +38,9 @@ services:
       timeout: 5s
       retries: 12
       start_period: 45s
+
+networks:
+  generalcompute_net:
+    driver: bridge
+    name: generalcompute_net
+
