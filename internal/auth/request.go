@@ -48,6 +48,7 @@ type Resolver struct {
 
 	mu               sync.Mutex
 	tokenRefreshedAt map[string]time.Time
+	cooldownUntil    map[string]time.Time
 }
 
 func NewResolver(store *config.Store, login LoginFunc) *Resolver {
@@ -55,6 +56,7 @@ func NewResolver(store *config.Store, login LoginFunc) *Resolver {
 		Store:            store,
 		Login:            login,
 		tokenRefreshedAt: map[string]time.Time{},
+		cooldownUntil:    map[string]time.Time{},
 	}
 }
 
@@ -63,6 +65,50 @@ func (r *Resolver) poolFor(a *RequestAuth) *account.Pool {
 		return nil
 	}
 	return a.activePool
+}
+
+func (r *Resolver) MarkAccountCooldown(accountID string, duration time.Duration) {
+	if r == nil || accountID == "" {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.cooldownUntil == nil {
+		r.cooldownUntil = map[string]time.Time{}
+	}
+	r.cooldownUntil[accountID] = time.Now().Add(duration)
+	config.Logger.Warn("[pool] account entered cooldown due to 429", "account", accountID, "duration", duration)
+}
+
+func (a *RequestAuth) MarkCooldown(duration time.Duration) {
+	if a == nil || a.resolver == nil || a.AccountID == "" {
+		return
+	}
+	a.resolver.MarkAccountCooldown(a.AccountID, duration)
+}
+
+func (r *Resolver) filterCooldownedAccounts(accounts []config.Account) []config.Account {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.cooldownUntil) == 0 {
+		return accounts
+	}
+	now := time.Now()
+	var healthy []config.Account
+	var cooling []config.Account
+	for _, acc := range accounts {
+		until, ok := r.cooldownUntil[acc.Identifier()]
+		if ok && now.Before(until) {
+			cooling = append(cooling, acc)
+			continue
+		}
+		healthy = append(healthy, acc)
+	}
+	if len(healthy) > 0 {
+		return healthy
+	}
+	// Fallback to all accounts if everything is cooled down
+	return accounts
 }
 
 func (r *Resolver) Determine(req *http.Request) (*RequestAuth, error) {
@@ -93,6 +139,10 @@ func (r *Resolver) authFromPoolDB(ctx context.Context, callerKey, callerID, targ
 	if err != nil {
 		return nil, err
 	}
+	if len(accounts) == 0 {
+		return nil, ErrNoAccount
+	}
+	accounts = r.filterCooldownedAccounts(accounts)
 	if len(accounts) == 0 {
 		return nil, ErrNoAccount
 	}

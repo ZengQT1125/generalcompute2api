@@ -3,6 +3,7 @@ package shared
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"generalcompute2api/internal/auth"
 	"generalcompute2api/internal/chathistory"
@@ -22,6 +23,7 @@ type AuthResolver interface {
 	Determine(req *http.Request) (*auth.RequestAuth, error)
 	DetermineCaller(req *http.Request) (*auth.RequestAuth, error)
 	Release(a *auth.RequestAuth)
+	MarkAccountCooldown(accountID string, duration time.Duration)
 }
 
 type DeepSeekCaller interface {

@@ -72,7 +72,7 @@ func NewApp() (*App, error) {
 		config.Logger.Warn("[chat_history] unavailable", "path", chatHistoryStore.Path(), "error", err)
 	}
 
-	modelsHandler := &shared.ModelsHandler{Store: store}
+	modelsHandler := &shared.ModelsHandler{Store: store, Auth: resolver}
 	chatHandler := &chat.Handler{Store: store, Auth: resolver, DS: glClient, ChatHistory: chatHistoryStore}
 	responsesHandler := &responses.Handler{Store: store, Auth: resolver, DS: glClient, ChatHistory: chatHistoryStore}
 	filesHandler := &files.Handler{Store: store, Auth: resolver, DS: glClient, ChatHistory: chatHistoryStore}
