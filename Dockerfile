@@ -29,6 +29,6 @@ CMD ["/usr/local/bin/generalcompute2api"]
 FROM runtime-base AS runtime-from-source
 COPY --from=go-builder /out/generalcompute2api /usr/local/bin/generalcompute2api
 
-USER generalcompute2api
+# USER generalcompute2api # Commented out to run as root and avoid SQLite permission issues on host-mounted volumes
 
 FROM runtime-from-source AS final
