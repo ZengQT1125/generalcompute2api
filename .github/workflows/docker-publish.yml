@@ -6,6 +6,12 @@ on:
       - main
     tags:
       - 'v*'
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+      - '.gitignore'
+      - '.dockerignore'
+      - '.env.example'
 
 env:
   REGISTRY: ghcr.io
