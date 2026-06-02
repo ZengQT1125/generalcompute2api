@@ -49,6 +49,14 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 		writeOpenAIError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
+
+	// 补齐默认参数为 0
+	for _, key := range []string{"temperature", "top_p", "presence_penalty", "frequency_penalty"} {
+		if _, ok := req[key]; !ok {
+			req[key] = 0
+		}
+	}
+
 	if err := h.preprocessInlineFileInputs(r.Context(), a, req); err != nil {
 		writeOpenAIInlineFileError(w, err)
 		return
@@ -82,7 +90,7 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 			writeOpenAIErrorWithCodeAndParam(w, outErr.Status, outErr.Message, outErr.Code, outErr.Param)
 			return
 		}
-		respBody := openaifmt.BuildChatCompletionWithToolCalls(result.SessionID, stdReq.ResponseModel, result.Turn.Prompt, result.Turn.Thinking, result.Turn.Text, result.Turn.ToolCalls, stdReq.ToolsRaw)
+		respBody := openaifmt.BuildChatCompletionWithToolCalls(result.SessionID, stdReq.ResponseModel, result.Turn.Prompt, "", result.Turn.Text, result.Turn.ToolCalls, stdReq.ToolsRaw)
 		respBody["usage"] = assistantturn.OpenAIChatUsage(result.Turn)
 		finishReason := assistantturn.FinalizeTurn(result.Turn, assistantturn.FinalizeOptions{}).FinishReason
 		if historySession != nil {

@@ -127,7 +127,7 @@ func (h *Handler) Responses(w http.ResponseWriter, r *http.Request) {
 		if historySession != nil {
 			historySession.SuccessTurn(http.StatusOK, result.Turn, assistantturn.OpenAIResponsesUsage(result.Turn))
 		}
-		responseObj := openaifmt.BuildResponseObjectWithToolCalls(responseID, stdReq.ResponseModel, result.Turn.Prompt, result.Turn.Thinking, result.Turn.Text, result.Turn.ToolCalls, stdReq.ToolsRaw)
+		responseObj := openaifmt.BuildResponseObjectWithToolCalls(responseID, stdReq.ResponseModel, result.Turn.Prompt, "", result.Turn.Text, result.Turn.ToolCalls, stdReq.ToolsRaw)
 		responseObj["usage"] = assistantturn.OpenAIResponsesUsage(result.Turn)
 		h.getResponseStore().put(owner, responseID, responseObj)
 		writeJSON(w, http.StatusOK, responseObj)
@@ -174,7 +174,7 @@ func (h *Handler) handleResponsesNonStream(w http.ResponseWriter, resp *http.Res
 		return
 	}
 
-	responseObj := openaifmt.BuildResponseObjectWithToolCalls(responseID, model, finalPrompt, turn.Thinking, turn.Text, turn.ToolCalls, toolsRaw)
+	responseObj := openaifmt.BuildResponseObjectWithToolCalls(responseID, model, finalPrompt, "", turn.Text, turn.ToolCalls, toolsRaw)
 	responseObj["usage"] = assistantturn.OpenAIResponsesUsage(turn)
 	h.getResponseStore().put(owner, responseID, responseObj)
 	writeJSON(w, http.StatusOK, responseObj)

@@ -12,6 +12,10 @@ type ThinkingInjectionConfig interface {
 }
 
 func ApplyThinkingInjection(store ThinkingInjectionConfig, stdReq promptcompat.StandardRequest) promptcompat.StandardRequest {
+	if stdReq.ResolvedModel == "minimax-m2.7" {
+		config.Logger.Debug("[thinking_injection] skip minimax: no injection needed for minimax")
+		return stdReq
+	}
 	if store == nil {
 		config.Logger.Debug("[thinking_injection] skip: nil store")
 		return stdReq

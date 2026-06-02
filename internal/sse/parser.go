@@ -84,7 +84,11 @@ func ParseSSEChunkForContentDetailed(chunk map[string]any, thinkingEnabled bool,
 				var parts []ContentPart
 				var detectionThinkingParts []ContentPart
 
-				if reasoning, ok := delta["reasoning_content"].(string); ok && reasoning != "" {
+				reasoning, ok := delta["reasoning_content"].(string)
+				if !ok || reasoning == "" {
+					reasoning, _ = delta["reasoning"].(string)
+				}
+				if reasoning != "" {
 					parts = append(parts, ContentPart{Text: reasoning, Type: "thinking"})
 					detectionThinkingParts = append(detectionThinkingParts, ContentPart{Text: reasoning, Type: "thinking"})
 				}
