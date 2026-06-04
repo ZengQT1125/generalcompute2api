@@ -26,6 +26,25 @@ func main() {
 		os.Exit(1)
 	}
 	defer app.Close()
+
+	// 验证并打印当前的并发限制及数据库配置，便于用户确认配置是否成功加载
+	maxInflight := app.Store.RuntimeAccountMaxInflight()
+	globalMaxInflight := app.Store.RuntimeGlobalMaxInflight(-1)
+	dbPath := os.Getenv("GENERALCOMPUTE2API_DATABASE_PATH")
+	if dbPath == "" {
+		dbPath = "docker-data/generalcompute2api/generalcompute2api.db"
+	}
+	maxAccountsPerKey := os.Getenv("GENERALCOMPUTE2API_POOL_MAX_ACCOUNTS_PER_KEY")
+	if maxAccountsPerKey == "" {
+		maxAccountsPerKey = "0"
+	}
+
+	config.Logger.Info("[config] startup environment check",
+		"database_path", dbPath,
+		"account_max_inflight", maxInflight,
+		"global_max_inflight", globalMaxInflight,
+		"pool_max_accounts_per_key", maxAccountsPerKey,
+	)
 	port := strings.TrimSpace(os.Getenv("PORT"))
 	if port == "" {
 		port = "8000"
