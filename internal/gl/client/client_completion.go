@@ -6,10 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"generalcompute2api/internal/auth"
+	"generalcompute2api/internal/config"
 )
 
 // CallCompletion 完美实现了原 dsclient.CallCompletion 接口，执行向 GL 后端的 OpenAI 对话转发
@@ -59,7 +62,17 @@ func (c *Client) CallCompletion(ctx context.Context, a *auth.RequestAuth, payloa
 	glURL := "https://api.generalcompute.com/dashboard/playground/chat/completions"
 
 	var lastErr error
-	for attempt := 0; attempt < maxAttempts; attempt++ {
+	attemptBudget := maxAttempts
+	if a != nil && a.UseConfigToken {
+		if n := a.PoolAccountCount(); n > attemptBudget {
+			attemptBudget = n
+		}
+	}
+	if attemptBudget <= 0 {
+		attemptBudget = 1
+	}
+	transportErrors := 0
+	for attempt := 0; attempt < attemptBudget; attempt++ {
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, glURL, bytes.NewReader(b))
 		if err != nil {
 			return nil, fmt.Errorf("create downstream request: %w", err)
@@ -75,6 +88,10 @@ func (c *Client) CallCompletion(ctx context.Context, a *auth.RequestAuth, payloa
 		resp, err := c.HttpClient.Do(req)
 		if err != nil {
 			lastErr = err
+			transportErrors++
+			if transportErrors >= maxAttempts {
+				break
+			}
 			continue
 		}
 
@@ -93,6 +110,30 @@ func (c *Client) CallCompletion(ctx context.Context, a *auth.RequestAuth, payloa
 			return nil, fmt.Errorf("GL authentication failed (401/403)")
 		}
 
+		if shouldFailoverGLStatus(resp.StatusCode) {
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if c.Auth != nil && a != nil && a.UseConfigToken {
+				discarded := c.Auth.TryAutoDiscardFromHTTPBody(ctx, a, body)
+				if !discarded {
+					c.Auth.MarkAccountCooldown(a.AccountID, 2*time.Minute)
+				}
+				config.Logger.Warn("[gl] upstream 5xx; switching pooled account",
+					"status", resp.StatusCode,
+					"account", a.AccountID,
+					"auto_discarded", discarded,
+					"attempt", attempt+1,
+					"attempt_budget", attemptBudget,
+				)
+				if c.Auth.SwitchAccount(ctx, a) {
+					continue
+				}
+			}
+			resp.Body = io.NopCloser(bytes.NewReader(body))
+			resp.ContentLength = int64(len(body))
+			return resp, nil
+		}
+
 		return resp, nil
 	}
 
@@ -100,6 +141,10 @@ func (c *Client) CallCompletion(ctx context.Context, a *auth.RequestAuth, payloa
 		return nil, fmt.Errorf("GL API completions request failed after retries: %w", lastErr)
 	}
 	return nil, errors.New("GL API completions failed")
+}
+
+func shouldFailoverGLStatus(status int) bool {
+	return status >= http.StatusInternalServerError && status <= 599
 }
 
 func payloadValueOrZero(payload map[string]any, key string) any {

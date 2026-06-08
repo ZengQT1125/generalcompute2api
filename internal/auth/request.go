@@ -87,6 +87,13 @@ func (a *RequestAuth) MarkCooldown(duration time.Duration) {
 	a.resolver.MarkAccountCooldown(a.AccountID, duration)
 }
 
+func (a *RequestAuth) PoolAccountCount() int {
+	if a == nil || a.activePool == nil {
+		return 0
+	}
+	return a.activePool.AccountCount()
+}
+
 func (r *Resolver) filterCooldownedAccounts(accounts []config.Account) []config.Account {
 	r.mu.Lock()
 	defer r.mu.Unlock()
