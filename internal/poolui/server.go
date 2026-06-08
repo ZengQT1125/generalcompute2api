@@ -420,7 +420,7 @@ func (s *Server) restoreAccount(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getVersion(w http.ResponseWriter, r *http.Request) {
 	v := version.BuildVersion
 	if v == "" {
-		v = "v2.2.0"
+		v = "v2.2.1"
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"version": v})
 }
