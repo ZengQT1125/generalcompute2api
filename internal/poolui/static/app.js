@@ -615,7 +615,7 @@ function renderAccounts() {
   const pageRows = filtered.slice(startIdx, endIdx);
   
   tbody.innerHTML = "";
-  pageRows.forEach((a) => {
+  pageRows.forEach((a, idx) => {
     const tr = document.createElement("tr");
     if (state.testStatus[a.identifier]?.status === "fail") {
       tr.classList.add("row-fail");
@@ -623,7 +623,7 @@ function renderAccounts() {
       tr.classList.add("row-ok");
     }
     tr.innerHTML = `
-      <td>${a.position + 1}</td>
+      <td>${startIdx + idx + 1}</td>
       <td>${escapeHtml(a.identifier)}</td>
       <td>${escapeHtml(a.token_preview || (a.has_token ? "有" : "—"))}</td>
       <td>${poolStatusHTML(a)}</td>
