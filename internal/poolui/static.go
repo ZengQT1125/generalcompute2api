@@ -38,7 +38,10 @@ func (s *Server) serveStatic(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
 	} else if strings.HasSuffix(path, ".js") {
 		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
-		w.Header().Set("Cache-Control", "no-cache")
 	}
+	// 管理端是嵌入式静态资源，禁用缓存可避免用户升级后继续加载旧版 app.js。
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
 	_, _ = w.Write(b)
 }
