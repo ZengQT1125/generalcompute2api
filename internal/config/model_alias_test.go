@@ -2,10 +2,10 @@ package config
 
 import "testing"
 
-func TestResolveModelDirectDeepSeekFlash(t *testing.T) {
-	got, ok := ResolveModel("deepseek-v4-flash")
-	if !ok || got != "deepseek-v4-flash" {
-		t.Fatalf("expected deepseek-v4-flash, got ok=%v model=%q", ok, got)
+func TestResolveModelDirectGLModel(t *testing.T) {
+	got, ok := ResolveModel("deepseek-v3.2")
+	if !ok || got != "deepseek-v3.2" {
+		t.Fatalf("expected deepseek-v3.2, got ok=%v model=%q", ok, got)
 	}
 }
 
@@ -23,10 +23,10 @@ func TestResolveModelRejectsNoThinkingSuffix(t *testing.T) {
 	}
 }
 
-func TestOpenAIModelByIDPreservesFlashID(t *testing.T) {
-	info, ok := OpenAIModelByID("deepseek-v4-flash")
-	if !ok || info.ID != "deepseek-v4-flash" {
-		t.Fatalf("expected advertised deepseek-v4-flash, got ok=%v id=%q", ok, info.ID)
+func TestOpenAIModelByIDPreservesGLModelID(t *testing.T) {
+	info, ok := OpenAIModelByID("deepseek-v3.2")
+	if !ok || info.ID != "deepseek-v3.2" {
+		t.Fatalf("expected advertised deepseek-v3.2, got ok=%v id=%q", ok, info.ID)
 	}
 }
 
@@ -46,7 +46,7 @@ func TestResolveModelRejectsUnknownAliases(t *testing.T) {
 }
 
 func TestUpstreamDeepSeekSKU(t *testing.T) {
-	if got := UpstreamDeepSeekSKU("deepseek-v4-flash"); got != "deepseek-v4-flash" {
+	if got := UpstreamDeepSeekSKU("deepseek-v3.2"); got != "deepseek-v3.2" {
 		t.Fatalf("unexpected sku: %q", got)
 	}
 }
@@ -55,7 +55,7 @@ func TestUpstreamSafeModelType(t *testing.T) {
 	if got := UpstreamSafeModelType("vision"); got != "default" {
 		t.Fatalf("expected default, got %q", got)
 	}
-	if got := UpstreamSafeModelType(""); got != "" {
-		t.Fatalf("expected empty, got %q", got)
+	if got := UpstreamSafeModelType(""); got != "default" {
+		t.Fatalf("expected default, got %q", got)
 	}
 }

@@ -6,12 +6,14 @@ import (
 	"strings"
 )
 
+const unlimitedQueueSize = -1
+
 func (p *Pool) ApplyRuntimeLimits(maxInflightPerAccount, maxQueueSize, globalMaxInflight int) {
 	if maxInflightPerAccount <= 0 {
 		maxInflightPerAccount = 1
 	}
 	if maxQueueSize < 0 {
-		maxQueueSize = 0
+		maxQueueSize = unlimitedQueueSize
 	}
 	if globalMaxInflight <= 0 {
 		globalMaxInflight = maxInflightPerAccount * len(p.lookup.Accounts())
@@ -53,10 +55,7 @@ func maxQueueFromEnv(defaultSize int) int {
 			return n
 		}
 	}
-	if defaultSize < 0 {
-		return 0
-	}
-	return defaultSize
+	return unlimitedQueueSize
 }
 
 func (p *Pool) canAcquireIDLocked(accountID string) bool {

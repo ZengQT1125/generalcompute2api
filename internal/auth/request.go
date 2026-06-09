@@ -49,6 +49,8 @@ type Resolver struct {
 	mu               sync.Mutex
 	tokenRefreshedAt map[string]time.Time
 	cooldownUntil    map[string]time.Time
+	poolMu           sync.Mutex
+	poolsByAPIKey    map[string]*account.Pool
 }
 
 func NewResolver(store *config.Store, login LoginFunc) *Resolver {
@@ -57,6 +59,7 @@ func NewResolver(store *config.Store, login LoginFunc) *Resolver {
 		Login:            login,
 		tokenRefreshedAt: map[string]time.Time{},
 		cooldownUntil:    map[string]time.Time{},
+		poolsByAPIKey:    map[string]*account.Pool{},
 	}
 }
 
@@ -72,11 +75,12 @@ func (r *Resolver) MarkAccountCooldown(accountID string, duration time.Duration)
 		return
 	}
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	if r.cooldownUntil == nil {
 		r.cooldownUntil = map[string]time.Time{}
 	}
 	r.cooldownUntil[accountID] = time.Now().Add(duration)
+	r.mu.Unlock()
+	r.removeAccountFromCachedPools(accountID)
 	config.Logger.Warn("[pool] account entered cooldown due to 429", "account", accountID, "duration", duration)
 }
 
@@ -153,9 +157,44 @@ func (r *Resolver) authFromPoolDB(ctx context.Context, callerKey, callerID, targ
 	if len(accounts) == 0 {
 		return nil, ErrNoAccount
 	}
-	mem := account.NewMemoryLookup(accounts)
-	subPool := account.NewPoolWithRuntime(mem, r.Store)
+	subPool := r.sharedPoolForAPIKey(callerKey, accounts)
 	return r.acquireManagedRequestAuth(ctx, callerID, target, subPool, true)
+}
+
+func (r *Resolver) sharedPoolForAPIKey(apiKey string, accounts []config.Account) *account.Pool {
+	apiKey = strings.TrimSpace(apiKey)
+	if r == nil || apiKey == "" {
+		return account.NewPoolWithRuntime(account.NewMemoryLookup(accounts), nil)
+	}
+	r.poolMu.Lock()
+	defer r.poolMu.Unlock()
+	if r.poolsByAPIKey == nil {
+		r.poolsByAPIKey = map[string]*account.Pool{}
+	}
+	if p := r.poolsByAPIKey[apiKey]; p != nil {
+		p.SyncAccounts(accounts)
+		return p
+	}
+	p := account.NewPoolWithRuntime(account.NewMemoryLookup(accounts), r.Store)
+	r.poolsByAPIKey[apiKey] = p
+	return p
+}
+
+func (r *Resolver) removeAccountFromCachedPools(accountID string) {
+	if r == nil || accountID == "" {
+		return
+	}
+	r.poolMu.Lock()
+	pools := make([]*account.Pool, 0, len(r.poolsByAPIKey))
+	for _, p := range r.poolsByAPIKey {
+		if p != nil {
+			pools = append(pools, p)
+		}
+	}
+	r.poolMu.Unlock()
+	for _, p := range pools {
+		p.RemoveAccount(accountID)
+	}
 }
 
 func (r *Resolver) acquireManagedRequestAuth(ctx context.Context, callerID, target string, pool *account.Pool, poolManaged bool) (*RequestAuth, error) {
@@ -171,7 +210,9 @@ func (r *Resolver) acquireManagedRequestAuth(ctx context.Context, callerID, targ
 			}
 			return nil, ErrNoAccount
 		}
-		acc, ok := pool.AcquireWait(ctx, target, tried)
+		acquireCtx, cancel := r.accountAcquireContext(ctx)
+		acc, ok := pool.AcquireWait(acquireCtx, target, tried)
+		cancel()
 		if !ok {
 			if lastEnsureErr != nil {
 				return nil, lastEnsureErr
@@ -202,6 +243,19 @@ func (r *Resolver) acquireManagedRequestAuth(ctx context.Context, callerID, targ
 		}
 		return a, nil
 	}
+}
+
+func (r *Resolver) accountAcquireContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	timeout := 120 * time.Second
+	if r != nil && r.Store != nil {
+		if seconds := r.Store.RuntimeAccountWaitTimeoutSeconds(); seconds > 0 {
+			timeout = time.Duration(seconds) * time.Second
+		}
+	}
+	return context.WithTimeout(ctx, timeout)
 }
 
 // DetermineCaller resolves caller identity without acquiring any pooled account.

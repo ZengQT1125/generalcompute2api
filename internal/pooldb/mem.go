@@ -71,13 +71,19 @@ func (m *Mem) LoadAccountsForAPIKey(_ context.Context, apiKey string) ([]config.
 		return nil, ErrAPIKeyDisabled
 	}
 	src := m.pools[apiKey]
-	out := make([]config.Account, len(src))
-	for i, acc := range src {
+	out := make([]config.Account, 0, len(src))
+	discarded := m.discard[apiKey]
+	for _, acc := range src {
 		id := acc.Identifier()
+		if discarded != nil {
+			if _, ok := discarded[id]; ok {
+				continue
+			}
+		}
 		if tok, ok := m.tokens[id]; ok {
 			acc.Token = tok
 		}
-		out[i] = acc
+		out = append(out, acc)
 	}
 	return limitAccounts(out), nil
 }

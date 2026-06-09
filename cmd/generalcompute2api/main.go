@@ -30,6 +30,7 @@ func main() {
 	// 验证并打印当前的并发限制及数据库配置，便于用户确认配置是否成功加载
 	maxInflight := app.Store.RuntimeAccountMaxInflight()
 	globalMaxInflight := app.Store.RuntimeGlobalMaxInflight(-1)
+	accountWaitTimeout := app.Store.RuntimeAccountWaitTimeoutSeconds()
 	dbPath := os.Getenv("GENERALCOMPUTE2API_DATABASE_PATH")
 	if dbPath == "" {
 		dbPath = "docker-data/generalcompute2api/generalcompute2api.db"
@@ -43,6 +44,7 @@ func main() {
 		"database_path", dbPath,
 		"account_max_inflight", maxInflight,
 		"global_max_inflight", globalMaxInflight,
+		"account_wait_timeout_seconds", accountWaitTimeout,
 		"pool_max_accounts_per_key", maxAccountsPerKey,
 	)
 	port := strings.TrimSpace(os.Getenv("PORT"))

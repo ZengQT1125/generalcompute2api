@@ -68,6 +68,7 @@ type RuntimeConfig struct {
 	AccountMaxInflight        int `json:"account_max_inflight,omitempty"`
 	AccountMaxQueue           int `json:"account_max_queue,omitempty"`
 	GlobalMaxInflight         int `json:"global_max_inflight,omitempty"`
+	AccountWaitTimeoutSeconds int `json:"account_wait_timeout_seconds,omitempty"`
 	TokenRefreshIntervalHours int `json:"token_refresh_interval_hours,omitempty"`
 }
 

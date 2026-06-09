@@ -63,6 +63,9 @@ func ValidateRuntimeConfig(runtime RuntimeConfig) error {
 	if err := ValidateIntRange("runtime.global_max_inflight", runtime.GlobalMaxInflight, 1, 200000, false); err != nil {
 		return err
 	}
+	if err := ValidateIntRange("runtime.account_wait_timeout_seconds", runtime.AccountWaitTimeoutSeconds, 1, 86400, false); err != nil {
+		return err
+	}
 	if err := ValidateIntRange("runtime.token_refresh_interval_hours", runtime.TokenRefreshIntervalHours, 1, 720, false); err != nil {
 		return err
 	}

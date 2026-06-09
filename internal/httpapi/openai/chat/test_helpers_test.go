@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"generalcompute2api/internal/auth"
 	dsclient "generalcompute2api/internal/deepseek/client"
@@ -70,6 +71,8 @@ func (streamStatusAuthStub) DetermineCaller(_ *http.Request) (*auth.RequestAuth,
 
 func (streamStatusAuthStub) Release(_ *auth.RequestAuth) {}
 
+func (streamStatusAuthStub) MarkAccountCooldown(_ string, _ time.Duration) {}
+
 type streamStatusManagedAuthStub struct{}
 
 func (streamStatusManagedAuthStub) Determine(_ *http.Request) (*auth.RequestAuth, error) {
@@ -87,6 +90,8 @@ func (streamStatusManagedAuthStub) DetermineCaller(_ *http.Request) (*auth.Reque
 }
 
 func (streamStatusManagedAuthStub) Release(_ *auth.RequestAuth) {}
+
+func (streamStatusManagedAuthStub) MarkAccountCooldown(_ string, _ time.Duration) {}
 
 type streamStatusDSStub struct {
 	resp *http.Response

@@ -9,6 +9,9 @@ func (p *Pool) canQueueLocked(target string, exclude map[string]bool) bool {
 			return false
 		}
 	}
+	if p.maxQueueSize == unlimitedQueueSize {
+		return true
+	}
 	if p.maxQueueSize <= 0 {
 		return false
 	}

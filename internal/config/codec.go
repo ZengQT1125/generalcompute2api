@@ -15,7 +15,7 @@ func (c Config) MarshalJSON() ([]byte, error) {
 	if len(c.Proxies) > 0 {
 		m["proxies"] = c.Proxies
 	}
-	if c.Runtime.AccountMaxInflight > 0 || c.Runtime.AccountMaxQueue > 0 || c.Runtime.GlobalMaxInflight > 0 || c.Runtime.TokenRefreshIntervalHours > 0 {
+	if c.Runtime.AccountMaxInflight > 0 || c.Runtime.AccountMaxQueue > 0 || c.Runtime.GlobalMaxInflight > 0 || c.Runtime.AccountWaitTimeoutSeconds > 0 || c.Runtime.TokenRefreshIntervalHours > 0 {
 		m["runtime"] = c.Runtime
 	}
 	if c.Responses.StoreTTLSeconds > 0 {

@@ -139,7 +139,7 @@ func TestPoolStatusRecommendedConcurrencyDefault(t *testing.T) {
 	if got, ok := status["recommended_concurrency"].(int); !ok || got != 2 {
 		t.Fatalf("unexpected recommended_concurrency: %#v", status["recommended_concurrency"])
 	}
-	if got, ok := status["max_queue_size"].(int); !ok || got != 2 {
+	if got, ok := status["max_queue_size"].(int); !ok || got != unlimitedQueueSize {
 		t.Fatalf("unexpected max_queue_size: %#v", status["max_queue_size"])
 	}
 }
@@ -154,7 +154,7 @@ func TestPoolStatusRecommendedConcurrencyRespectsOverride(t *testing.T) {
 	if got, ok := status["recommended_concurrency"].(int); !ok || got != 6 {
 		t.Fatalf("unexpected recommended_concurrency: %#v", status["recommended_concurrency"])
 	}
-	if got, ok := status["max_queue_size"].(int); !ok || got != 6 {
+	if got, ok := status["max_queue_size"].(int); !ok || got != unlimitedQueueSize {
 		t.Fatalf("unexpected max_queue_size: %#v", status["max_queue_size"])
 	}
 }
@@ -253,7 +253,11 @@ func TestPoolAcquireWaitQueuesAndSucceedsAfterRelease(t *testing.T) {
 }
 
 func TestPoolAcquireWaitQueueLimitReturnsFalse(t *testing.T) {
-	pool := newSingleAccountPoolForTest(t, "1")
+	t.Setenv("GENERALCOMPUTE2API_ACCOUNT_MAX_QUEUE", "1")
+	t.Setenv("GENERALCOMPUTE2API_ACCOUNT_MAX_INFLIGHT", "1")
+	pool := newTestPool([]config.Account{
+		{Email: "acc1@example.com", Token: "token1"},
+	}, config.LoadStore())
 	first, ok := pool.Acquire("", nil)
 	if !ok {
 		t.Fatal("expected first acquire to succeed")

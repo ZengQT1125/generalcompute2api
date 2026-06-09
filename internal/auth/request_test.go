@@ -324,6 +324,84 @@ func TestDetermineManagedAccountRetriesOtherAccountOnLoginFailure(t *testing.T) 
 	}
 }
 
+func TestDetermineUsesSharedPoolInflightLimitAcrossRequests(t *testing.T) {
+	t.Setenv("GENERALCOMPUTE2API_ACCOUNT_MAX_QUEUE", "0")
+	resolver := newTestResolverWithAccounts(t, "managed-key", []config.Account{
+		{Email: "acc1@example.com", Password: "pwd", Token: "token-1"},
+		{Email: "acc2@example.com", Password: "pwd", Token: "token-2"},
+	}, func(_ context.Context, acc config.Account) (string, error) {
+		return "fresh-" + acc.Identifier(), nil
+	})
+	if err := resolver.Store.Update(func(c *config.Config) error {
+		c.Runtime.AccountMaxInflight = 2
+		c.Runtime.GlobalMaxInflight = 4
+		return nil
+	}); err != nil {
+		t.Fatalf("seed runtime failed: %v", err)
+	}
+
+	acquired := make([]*RequestAuth, 0, 4)
+	defer func() {
+		for _, a := range acquired {
+			resolver.Release(a)
+		}
+	}()
+
+	for i, want := range []string{"acc1@example.com", "acc2@example.com", "acc1@example.com", "acc2@example.com"} {
+		req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+		req.Header.Set("x-api-key", "managed-key")
+		a, err := resolver.Determine(req)
+		if err != nil {
+			t.Fatalf("determine %d failed: %v", i+1, err)
+		}
+		acquired = append(acquired, a)
+		if a.AccountID != want {
+			t.Fatalf("unexpected account at acquire %d: got %q want %q", i+1, a.AccountID, want)
+		}
+	}
+
+	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	req.Header.Set("x-api-key", "managed-key")
+	if _, err := resolver.Determine(req); !errors.Is(err, ErrNoAccount) {
+		t.Fatalf("expected shared pool to reject fifth acquire, got %v", err)
+	}
+}
+
+func TestDetermineQueuesUntilAccountWaitTimeout(t *testing.T) {
+	resolver := newTestResolverWithAccounts(t, "managed-key", []config.Account{
+		{Email: "acc1@example.com", Password: "pwd", Token: "token-1"},
+	}, func(_ context.Context, acc config.Account) (string, error) {
+		return "fresh-" + acc.Identifier(), nil
+	})
+	if err := resolver.Store.Update(func(c *config.Config) error {
+		c.Runtime.AccountMaxInflight = 1
+		c.Runtime.AccountWaitTimeoutSeconds = 1
+		return nil
+	}); err != nil {
+		t.Fatalf("seed runtime failed: %v", err)
+	}
+
+	firstReq, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	firstReq.Header.Set("x-api-key", "managed-key")
+	first, err := resolver.Determine(firstReq)
+	if err != nil {
+		t.Fatalf("first determine failed: %v", err)
+	}
+	defer resolver.Release(first)
+
+	secondReq, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	secondReq.Header.Set("x-api-key", "managed-key")
+	start := time.Now()
+	_, err = resolver.Determine(secondReq)
+	elapsed := time.Since(start)
+	if !errors.Is(err, ErrNoAccount) {
+		t.Fatalf("expected queued request to time out with ErrNoAccount, got %v", err)
+	}
+	if elapsed < 900*time.Millisecond {
+		t.Fatalf("expected request to wait before timeout, elapsed=%s", elapsed)
+	}
+}
+
 func TestDetermineTargetAccountDoesNotFallbackOnLoginFailure(t *testing.T) {
 	resolver := newTestResolverWithAccounts(t, "managed-key", []config.Account{
 		{Email: "bad@example.com", Password: "pwd"},

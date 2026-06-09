@@ -68,10 +68,7 @@ func (s *Store) RuntimeAccountMaxQueue(defaultSize int) int {
 			return n
 		}
 	}
-	if defaultSize < 0 {
-		return 0
-	}
-	return defaultSize
+	return -1
 }
 
 func (s *Store) RuntimeGlobalMaxInflight(defaultSize int) int {
@@ -89,6 +86,20 @@ func (s *Store) RuntimeGlobalMaxInflight(defaultSize int) int {
 		return 0
 	}
 	return defaultSize
+}
+
+func (s *Store) RuntimeAccountWaitTimeoutSeconds() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.cfg.Runtime.AccountWaitTimeoutSeconds > 0 {
+		return s.cfg.Runtime.AccountWaitTimeoutSeconds
+	}
+	if raw := strings.TrimSpace(os.Getenv("GENERALCOMPUTE2API_ACCOUNT_WAIT_TIMEOUT_SECONDS")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			return n
+		}
+	}
+	return 120
 }
 
 func (s *Store) RuntimeTokenRefreshIntervalHours() int {
