@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/quotedprintable"
 	"net/http"
 	"net/url"
 	"os"
@@ -336,14 +337,15 @@ func (c *Client) AutoLoginMagicLink(ctx context.Context, acc config.Account) (ne
 						for _, m := range mails {
 							rawStr := m.Raw
 							if rawStr != "" {
-								match := linkRegex.FindString(rawStr)
+								decodedBody := parseAndDecodeRawEmail(rawStr)
+								match := linkRegex.FindString(decodedBody)
 								if match != "" {
 									magicLink = match
 									break
 								}
 								// 兜底正则
 								backupRegex := regexp.MustCompile(`https?://[^\s"'<>]*?token=[A-Za-z0-9%_.-]+`)
-								matches := backupRegex.FindAllString(rawStr, -1)
+								matches := backupRegex.FindAllString(decodedBody, -1)
 								for _, link := range matches {
 									if strings.Contains(link, "accept") || strings.Contains(link, "sign_in") || strings.Contains(link, "clerk") {
 										magicLink = link
@@ -488,4 +490,26 @@ func (c *Client) AutoLoginMagicLink(ctx context.Context, acc config.Account) (ne
 	config.Logger.Info("[glclient] 成功抓取全部新凭证！", "session_id", sessIDMatch, "org_id", orgIDMatch)
 
 	return "__client=" + activeCookie, sessIDMatch, orgIDMatch, nil
+}
+
+// parseAndDecodeRawEmail 解析 SMTP 原始邮件格式并对 quoted-printable 编码进行解码还原为纯文本正文
+func parseAndDecodeRawEmail(rawMail string) string {
+	parts := strings.SplitN(rawMail, "\r\n\r\n", 2)
+	body := rawMail
+	if len(parts) == 2 {
+		body = parts[1]
+	} else {
+		parts = strings.SplitN(rawMail, "\n\n", 2)
+		if len(parts) == 2 {
+			body = parts[1]
+		}
+	}
+
+	dec := quotedprintable.NewReader(strings.NewReader(body))
+	decodedBytes, err := io.ReadAll(dec)
+	if err == nil {
+		body = string(decodedBytes)
+	}
+
+	return body
 }
