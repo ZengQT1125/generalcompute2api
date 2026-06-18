@@ -80,7 +80,9 @@ func (s *Server) probeOneAccount(ctx context.Context, apiKey string, cred pooldb
 		gl := glclient.NewClient(nil, nil)
 		jwt, err = gl.Login(ctx, acc)
 		if err == nil {
-			err = probeGLChat(ctx, gl, cred.Identifier, jwt)
+			if probeErr := probeGLChat(ctx, gl, cred.Identifier, jwt); probeErr != nil {
+				config.Logger.Warn("[poolui] GL chat probe failed after token refresh; keeping account available", "account", cred.Identifier, "model", glProbeModel, "error", probeErr)
+			}
 		}
 	} else {
 		// 属于普通 DeepSeek 官方账号，走 dsclient 的账号密码登陆测号

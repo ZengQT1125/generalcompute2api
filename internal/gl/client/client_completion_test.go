@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -88,6 +89,42 @@ func TestCallCompletionFailoversOnUpstream5xx(t *testing.T) {
 	}
 	if !strings.Contains(seenAuth[0], "bad-token") || !strings.Contains(seenAuth[1], "good-token") {
 		t.Fatalf("unexpected authorization sequence: %#v", seenAuth)
+	}
+}
+
+func TestCallCompletionMapsMinimaxModelForUpstream(t *testing.T) {
+	resolver := newGLTestResolver([]config.Account{
+		{Email: "good@example.com", Token: "good-token"},
+	})
+	a := newManagedAuth(t, resolver)
+	defer resolver.Release(a)
+
+	var upstreamModel string
+	c := &Client{
+		Auth: resolver,
+		HttpClient: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			var payload map[string]any
+			if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode payload failed: %v", err)
+			}
+			upstreamModel, _ = payload["model"].(string)
+			return textResponse(http.StatusOK, "data: [DONE]\n\n"), nil
+		})},
+		maxRetries: 1,
+	}
+
+	payload := validGLPayload()
+	payload["model"] = "minimax-m2.7"
+	resp, err := c.CallCompletion(context.Background(), a, payload, "", 1)
+	if err != nil {
+		t.Fatalf("call completion failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if upstreamModel != "minimax2.7" {
+		t.Fatalf("expected upstream minimax2.7, got %q", upstreamModel)
+	}
+	if payload["model"] != "minimax-m2.7" {
+		t.Fatalf("expected canonical payload model, got %q", payload["model"])
 	}
 }
 

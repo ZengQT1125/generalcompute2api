@@ -28,20 +28,18 @@ func (c *Client) CallCompletion(ctx context.Context, a *auth.RequestAuth, payloa
 		model = "deepseek-v3.2" // 默认模型
 	}
 
-	// 支持且仅支持这三个模型
-	switch model {
-	case "deepseek-v3.2", "deepseek-v3.1", "minimax-m2.7":
-		// 合法，正常传递
-		payload["model"] = model
-	default:
-		return nil, fmt.Errorf("unsupported model %q; only deepseek-v3.2, deepseek-v3.1, and minimax-m2.7 are supported", model)
+	requestedModel := model
+	model, upstreamModel, ok := normalizeGLModel(model)
+	if !ok {
+		return nil, fmt.Errorf("unsupported model %q; only deepseek-v3.2, deepseek-v3.1, and minimax-m2.7 are supported", requestedModel)
 	}
+	payload["model"] = model
 
 	// 重组为 GL 官网 API (api.generalcompute.com) 所需的标准 OpenAI 格式
 	messages, _ := payload["messages"].([]any)
 
 	glPayload := map[string]any{
-		"model":             model,
+		"model":             upstreamModel,
 		"messages":          messages,
 		"temperature":       payloadValueOrZero(payload, "temperature"),
 		"top_p":             payloadValueOrZero(payload, "top_p"),
@@ -145,6 +143,19 @@ func (c *Client) CallCompletion(ctx context.Context, a *auth.RequestAuth, payloa
 
 func shouldFailoverGLStatus(status int) bool {
 	return status >= http.StatusInternalServerError && status <= 599
+}
+
+func normalizeGLModel(model string) (canonical string, upstream string, ok bool) {
+	switch strings.ToLower(strings.TrimSpace(model)) {
+	case "deepseek-v3.2":
+		return "deepseek-v3.2", "deepseek-v3.2", true
+	case "deepseek-v3.1":
+		return "deepseek-v3.1", "deepseek-v3.1", true
+	case "minimax-m2.7", "minimax2.7", "minimax-2.7", "minimax-m2-7":
+		return "minimax-m2.7", "minimax2.7", true
+	default:
+		return "", "", false
+	}
 }
 
 func payloadValueOrZero(payload map[string]any, key string) any {
