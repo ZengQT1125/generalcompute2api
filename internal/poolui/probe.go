@@ -78,7 +78,9 @@ func (s *Server) probeOneAccount(ctx context.Context, apiKey string, cred pooldb
 	var err error
 
 	// 纯 GL Clerk 测号逻辑，使用 glclient
-	gl := glclient.NewClient(s.Store, nil)
+	resolver := auth.NewResolver(s.Store, nil)
+	resolver.PoolDB = s.DB
+	gl := glclient.NewClient(s.Store, resolver)
 	useExistingToken := strings.TrimSpace(cred.Token) != ""
 	jwt = cred.Token
 
@@ -88,7 +90,7 @@ func (s *Server) probeOneAccount(ctx context.Context, apiKey string, cred pooldb
 	}
 
 	if !useExistingToken || probeErr != nil {
-		jwt, err = gl.Login(ctx, acc)
+		jwt, err = gl.Login(glclient.WithMagicLinkAutoLogin(ctx), acc)
 		if err == nil {
 			probeErr = probeGLChat(ctx, gl, cred.Identifier, jwt)
 			if probeErr != nil {

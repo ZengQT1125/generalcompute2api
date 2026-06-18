@@ -32,6 +32,23 @@ func getClerkJSVersion() string {
 	return "6.17.0"
 }
 
+type magicLinkAutoLoginKey struct{}
+
+func WithMagicLinkAutoLogin(ctx context.Context) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, magicLinkAutoLoginKey{}, true)
+}
+
+func magicLinkAutoLoginAllowed(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	allowed, _ := ctx.Value(magicLinkAutoLoginKey{}).(bool)
+	return allowed
+}
+
 // extractClientCookie 提取 Cookie 中 __client 的字段值，并拼装为 "__client=xxx" 格式。
 func extractClientCookie(cookieStr string) string {
 	cookieStr = strings.TrimSpace(cookieStr)
@@ -165,7 +182,7 @@ func (c *Client) Login(ctx context.Context, acc config.Account) (string, error) 
 		errStr := string(body)
 
 		// 检查是否是已登出 (signed_out) 或无授权，执行 Magic Link 自动登录自愈
-		if strings.Contains(errStr, "signed_out") || strings.Contains(errStr, "Signed out") || resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		if magicLinkAutoLoginAllowed(ctx) && (strings.Contains(errStr, "signed_out") || strings.Contains(errStr, "Signed out") || resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden) {
 			config.Logger.Warn("[glclient] Clerk session is signed out or invalid. Attempting Auto-Login via Email Magic Link...", "email", acc.Email)
 
 			newCookie, newSessionID, newOrgID, autoErr := c.AutoLoginMagicLink(ctx, acc)
