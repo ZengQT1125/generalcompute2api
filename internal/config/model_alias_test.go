@@ -9,6 +9,15 @@ func TestResolveModelDirectGLModel(t *testing.T) {
 	}
 }
 
+func TestResolveModelMinimaxWebAliases(t *testing.T) {
+	for _, requested := range []string{"minimax2.7", "minimax-2.7", "minimax-m2-7"} {
+		got, ok := ResolveModel(requested)
+		if !ok || got != "minimax-m2.7" {
+			t.Fatalf("expected %q to resolve to minimax-m2.7, got ok=%v model=%q", requested, ok, got)
+		}
+	}
+}
+
 func TestResolveModelRejectsPro(t *testing.T) {
 	if got, ok := ResolveModel("deepseek-v4-pro"); ok {
 		t.Fatalf("expected deepseek-v4-pro to be rejected, got %q", got)

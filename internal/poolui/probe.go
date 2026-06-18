@@ -3,13 +3,20 @@ package poolui
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
 	"strings"
 
+	"generalcompute2api/internal/auth"
 	"generalcompute2api/internal/config"
 	dsclient "generalcompute2api/internal/deepseek/client"
 	glclient "generalcompute2api/internal/gl/client"
+	"generalcompute2api/internal/poolaccounthealth"
 	"generalcompute2api/internal/pooldb"
 )
+
+const glProbeModel = "minimax-m2.7"
 
 type accountTestResult struct {
 	Identifier    string `json:"identifier"`
@@ -58,7 +65,7 @@ func (s *Server) probeOneAccount(ctx context.Context, apiKey string, cred pooldb
 			acc.Cookie = extra.Cookie
 			acc.SessionID = extra.SessionID
 			acc.OrganizationID = extra.OrganizationID
-			
+
 			if acc.Cookie != "" || acc.SessionID != "" || acc.OrganizationID != "" {
 				isGL = true
 			}
@@ -67,11 +74,14 @@ func (s *Server) probeOneAccount(ctx context.Context, apiKey string, cred pooldb
 
 	var jwt string
 	var err error
-	
+
 	if isGL {
 		// 动态检测：属于 GL Clerk 会话账号，直接使用 glclient 刷新 Token 进行测号
 		gl := glclient.NewClient(nil, nil)
 		jwt, err = gl.Login(ctx, acc)
+		if err == nil {
+			err = probeGLChat(ctx, gl, cred.Identifier, jwt)
+		}
 	} else {
 		// 属于普通 DeepSeek 官方账号，走 dsclient 的账号密码登陆测号
 		acc.Email = cred.Identifier
@@ -83,11 +93,19 @@ func (s *Server) probeOneAccount(ctx context.Context, apiKey string, cred pooldb
 	if err != nil {
 		row.OK = false
 		row.Message = err.Error()
-		row.PoolStatus = "banned"
-		row.DiscardReason = "banned"
-		// 自动在 SQLite 号池中作废该账号
-		if sErr := s.DB.SetAccountPoolState(ctx, apiKey, cred.Identifier, true, "banned"); sErr == nil {
-			row.AutoDiscarded = true
+		reason := pooldb.DiscardReasonBanned
+		if isGL {
+			reason = discardReasonFromGLProbeError(err.Error())
+		}
+		if reason != "" {
+			row.PoolStatus = reason
+			row.DiscardReason = reason
+			// 自动在 SQLite 号池中作废该账号
+			if sErr := s.DB.SetAccountPoolState(ctx, apiKey, cred.Identifier, true, reason); sErr == nil {
+				row.AutoDiscarded = true
+			}
+		} else {
+			row.PoolStatus = poolaccounthealth.PoolStatusTransport
 		}
 		return row
 	}
@@ -104,6 +122,61 @@ func (s *Server) probeOneAccount(ctx context.Context, apiKey string, cred pooldb
 	_ = s.DB.SetAccountPoolState(ctx, apiKey, cred.Identifier, false, pooldb.DiscardReasonNone)
 
 	return row
+}
+
+func probeGLChat(ctx context.Context, gl *glclient.Client, identifier, jwt string) error {
+	a := &auth.RequestAuth{
+		AccountID:      strings.TrimSpace(identifier),
+		DeepSeekToken:  strings.TrimSpace(jwt),
+		UseConfigToken: false,
+		TriedAccounts:  map[string]bool{},
+	}
+	resp, err := gl.CallCompletion(ctx, a, map[string]any{
+		"model": glProbeModel,
+		"messages": []any{
+			map[string]any{"role": "user", "content": "ping"},
+		},
+	}, "", 1)
+	if err != nil {
+		return err
+	}
+	if resp == nil || resp.Body == nil {
+		return fmt.Errorf("GL %s probe returned empty response", glProbeModel)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	raw, readErr := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+	if readErr != nil {
+		return readErr
+	}
+	if reason, msg := poolaccounthealth.ClassifyResponseBytes(raw); reason != "" {
+		if strings.TrimSpace(msg) != "" {
+			return fmt.Errorf("%s", msg)
+		}
+		return fmt.Errorf("%s", reason)
+	}
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		msg := strings.TrimSpace(string(raw))
+		if msg == "" {
+			msg = http.StatusText(resp.StatusCode)
+		}
+		return fmt.Errorf("GL %s probe failed: status %d: %s", glProbeModel, resp.StatusCode, msg)
+	}
+	return nil
+}
+
+func discardReasonFromGLProbeError(msg string) string {
+	if reason := poolaccounthealth.ClassifyLoginError(msg); reason != "" {
+		return reason
+	}
+	lower := strings.ToLower(strings.TrimSpace(msg))
+	if strings.Contains(lower, "status 401") ||
+		strings.Contains(lower, "status 403") ||
+		strings.Contains(lower, "unauthorized") ||
+		strings.Contains(lower, "forbidden") {
+		return pooldb.DiscardReasonBanned
+	}
+	return ""
 }
 
 func (s *Server) runAccountTestsWithProgress(

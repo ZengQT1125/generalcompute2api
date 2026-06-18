@@ -23,6 +23,8 @@ func ResolveModel(requested string) (string, bool) {
 	switch requested {
 	case "deepseek-v3.2", "deepseek-v3.1", "minimax-m2.7":
 		return requested, true
+	case "minimax2.7", "minimax-2.7", "minimax-m2-7":
+		return "minimax-m2.7", true
 	default:
 		return "", false
 	}
