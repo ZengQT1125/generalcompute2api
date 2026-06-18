@@ -21,6 +21,7 @@ let state = {
   userStoppedTest: false,
   currentPage: 1,
   pageSize: 20,
+  selected: new Set(),
 };
 
 function headers() {
@@ -548,6 +549,7 @@ async function selectKey(apiKey) {
   state.testCancelled = false;
   state.userStoppedTest = false;
   state.currentPage = 1;
+  state.selected.clear();
   // renderKeys();
   $("#emptyState").classList.add("hidden");
   $("#poolView").classList.remove("hidden");
@@ -622,7 +624,9 @@ function renderAccounts() {
     } else if (state.testStatus[a.identifier]?.status === "ok") {
       tr.classList.add("row-ok");
     }
+    const isChecked = state.selected.has(a.identifier) ? "checked" : "";
     tr.innerHTML = `
+      <td><input type="checkbox" class="account-checkbox" data-id="${escapeAttr(a.identifier)}" ${isChecked}></td>
       <td>${startIdx + idx + 1}</td>
       <td>${escapeHtml(a.identifier)}</td>
       <td>${escapeHtml(a.token_preview || (a.has_token ? "有" : "—"))}</td>
@@ -631,6 +635,12 @@ function renderAccounts() {
     `;
     tbody.appendChild(tr);
   });
+
+  const chkAll = $("#chkSelectAll");
+  if (chkAll) {
+    chkAll.checked = pageRows.length > 0 && pageRows.every(a => state.selected.has(a.identifier));
+  }
+  updateBatchBarUI();
   
   // 更新分页显示栏状态
   const pBar = $("#paginationBar");
@@ -666,6 +676,19 @@ function renderAccounts() {
   $("#accountStats").textContent = stats;
   updateDiscardFailedButton();
   updateMutedTestButton();
+}
+
+function updateBatchBarUI() {
+  const bar = $("#batchBar");
+  const countEl = $("#selectedCount");
+  if (!bar || !countEl) return;
+  const count = state.selected.size;
+  if (count > 0) {
+    bar.classList.remove("hidden");
+    countEl.textContent = count;
+  } else {
+    bar.classList.add("hidden");
+  }
 }
 
 function escapeHtml(s) {
@@ -885,6 +908,7 @@ $$(".tab").forEach((btn) => {
     btn.classList.add("active");
     state.tab = btn.dataset.tab;
     state.currentPage = 1;
+    state.selected.clear();
     await loadAccounts();
   });
 });
@@ -1078,7 +1102,148 @@ $$("[data-close]").forEach((btn) => {
 $("#pageSizeSelect").addEventListener("change", (e) => {
   state.pageSize = e.target.value;
   state.currentPage = 1;
+  state.selected.clear();
   renderAccounts();
+});
+
+// 全选框事件
+$("#chkSelectAll")?.addEventListener("change", (e) => {
+  const filtered = filterAccounts(state.accounts);
+  const totalItems = filtered.length;
+  let pageSize = state.pageSize;
+  if (state.pageSize === "all") {
+    pageSize = totalItems > 0 ? totalItems : 1;
+  } else {
+    pageSize = parseInt(state.pageSize) || 20;
+  }
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  if (state.currentPage > totalPages) state.currentPage = totalPages;
+  if (state.currentPage < 1) state.currentPage = 1;
+  const startIdx = (state.currentPage - 1) * pageSize;
+  const endIdx = Math.min(startIdx + pageSize, totalItems);
+  const pageRows = filtered.slice(startIdx, endIdx);
+
+  const checked = e.target.checked;
+  pageRows.forEach(a => {
+    if (checked) {
+      state.selected.add(a.identifier);
+    } else {
+      state.selected.delete(a.identifier);
+    }
+  });
+  renderAccounts();
+});
+
+// 表格内单个 Checkbox 事件监听 (委托到 accountBody)
+$("#accountBody")?.addEventListener("change", (e) => {
+  const chk = e.target.closest(".account-checkbox");
+  if (!chk) return;
+  const id = chk.dataset.id;
+  if (chk.checked) {
+    state.selected.add(id);
+  } else {
+    state.selected.delete(id);
+  }
+  
+  // 更新表头全选状态和批量栏，而不需要重绘整个表格以防止体验不流畅
+  const filtered = filterAccounts(state.accounts);
+  const totalItems = filtered.length;
+  let pageSize = state.pageSize === "all" ? totalItems : (parseInt(state.pageSize) || 20);
+  const startIdx = (state.currentPage - 1) * pageSize;
+  const endIdx = Math.min(startIdx + pageSize, totalItems);
+  const pageRows = filtered.slice(startIdx, endIdx);
+
+  const chkAll = $("#chkSelectAll");
+  if (chkAll) {
+    chkAll.checked = pageRows.length > 0 && pageRows.every(a => state.selected.has(a.identifier));
+  }
+  updateBatchBarUI();
+});
+
+// 批量测号
+$("#btnBatchTest")?.addEventListener("click", () => {
+  if (state.selected.size === 0) return;
+  runBatchAccountTest(Array.from(state.selected), false);
+  state.selected.clear();
+  renderAccounts();
+});
+
+// 批量恢复
+$("#btnBatchRestore")?.addEventListener("click", async () => {
+  if (state.selected.size === 0 || state.testing) return;
+  const ids = Array.from(state.selected);
+  if (!confirm(`确定要批量恢复这 ${ids.length} 个账号吗？`)) return;
+  setTestingUI(true);
+  try {
+    const res = await api(`/api/keys/${encKey(state.currentKey)}/accounts/batch-restore`, {
+      method: "POST",
+      body: JSON.stringify({ identifiers: ids }),
+    });
+    if (res.success) {
+      toast(`已成功批量恢复 ${res.count} 个账号`);
+    } else {
+      toast("批量恢复失败", true);
+    }
+    state.selected.clear();
+    await loadAccounts();
+    await loadKeys();
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    setTestingUI(false);
+  }
+});
+
+// 批量作废
+$("#btnBatchDiscard")?.addEventListener("click", async () => {
+  if (state.selected.size === 0 || state.testing) return;
+  const ids = Array.from(state.selected);
+  if (!confirm(`确定要批量作废这 ${ids.length} 个账号吗？`)) return;
+  setTestingUI(true);
+  try {
+    const res = await api(`/api/keys/${encKey(state.currentKey)}/accounts/batch-discard`, {
+      method: "POST",
+      body: JSON.stringify({ identifiers: ids }),
+    });
+    if (res.success) {
+      toast(`已成功批量作废 ${res.count} 个账号`);
+    } else {
+      toast("批量作废失败", true);
+    }
+    state.selected.clear();
+    await loadAccounts();
+    await loadKeys();
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    setTestingUI(false);
+  }
+});
+
+// 批量删除
+$("#btnBatchDelete")?.addEventListener("click", async () => {
+  if (state.selected.size === 0 || state.testing) return;
+  const ids = Array.from(state.selected);
+  if (!confirm(`确定要从号池删除这 ${ids.length} 个账号吗？\n删除后它们与当前网关 Key 的绑定关系将解除。`)) return;
+  setTestingUI(true);
+  try {
+    const res = await api(`/api/keys/${encKey(state.currentKey)}/accounts/batch-delete`, {
+      method: "POST",
+      body: JSON.stringify({ identifiers: ids }),
+    });
+    if (res.success) {
+      toast(`已成功批量删除 ${res.count} 个账号`);
+    } else {
+      toast("批量删除失败", true);
+    }
+    state.selected.clear();
+    await loadAccounts();
+    await loadKeys();
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    setTestingUI(false);
+  }
 });
 
 $("#btnPageFirst").addEventListener("click", () => {
@@ -1121,10 +1286,10 @@ async function loadVersion() {
   try {
     const data = await api("/api/version");
     const el = $("#versionBadge");
-    if (el) el.textContent = data.version || "v2.3.0";
+    if (el) el.textContent = data.version || "v2.4.0";
   } catch (_) {
     const el = $("#versionBadge");
-    if (el) el.textContent = "v2.3.0";
+    if (el) el.textContent = "v2.4.0";
   }
 }
 

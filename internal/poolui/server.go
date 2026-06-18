@@ -63,6 +63,9 @@ func NewServer(db *pooldb.DB, store *config.Store) (*Server, error) {
 		ar.Get("/keys/{api_key}/accounts/test", s.getAccountTestJob)
 		ar.Post("/keys/{api_key}/accounts/test/cancel", s.cancelAccountTestJob)
 		ar.Post("/keys/{api_key}/accounts/test", s.testAccounts)
+		ar.Post("/keys/{api_key}/accounts/batch-discard", s.batchDiscardAccounts)
+		ar.Post("/keys/{api_key}/accounts/batch-restore", s.batchRestoreAccounts)
+		ar.Post("/keys/{api_key}/accounts/batch-delete", s.batchDeleteAccounts)
 		ar.Post("/keys/{api_key}/accounts/{identifier}/test", s.testOneAccount)
 		ar.Post("/keys/{api_key}/accounts/{identifier}/discard", s.discardAccount)
 		ar.Post("/keys/{api_key}/accounts/{identifier}/restore", s.restoreAccount)
@@ -398,6 +401,54 @@ func (s *Server) dbImportSingleJSON(ctx context.Context, key string, item map[st
 	return s.DB.AddAccountToPool(ctx, key, ident, string(credJSON))
 }
 
+func (s *Server) batchDiscardAccounts(w http.ResponseWriter, r *http.Request) {
+	key := routeAPIKey(r)
+	var req struct {
+		Identifiers []string `json:"identifiers"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"detail": "invalid json"})
+		return
+	}
+	if err := s.DB.BatchSetAccountDiscarded(r.Context(), key, req.Identifiers, true); err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "discarded": true, "count": len(req.Identifiers)})
+}
+
+func (s *Server) batchRestoreAccounts(w http.ResponseWriter, r *http.Request) {
+	key := routeAPIKey(r)
+	var req struct {
+		Identifiers []string `json:"identifiers"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"detail": "invalid json"})
+		return
+	}
+	if err := s.DB.BatchSetAccountDiscarded(r.Context(), key, req.Identifiers, false); err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "discarded": false, "count": len(req.Identifiers)})
+}
+
+func (s *Server) batchDeleteAccounts(w http.ResponseWriter, r *http.Request) {
+	key := routeAPIKey(r)
+	var req struct {
+		Identifiers []string `json:"identifiers"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"detail": "invalid json"})
+		return
+	}
+	if err := s.DB.BatchRemoveAccountsFromPool(r.Context(), key, req.Identifiers); err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "deleted": true, "count": len(req.Identifiers)})
+}
+
 func (s *Server) discardAccount(w http.ResponseWriter, r *http.Request) {
 	key := routeAPIKey(r)
 	ident := routeIdentifier(r)
@@ -421,7 +472,7 @@ func (s *Server) restoreAccount(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getVersion(w http.ResponseWriter, r *http.Request) {
 	v := version.BuildVersion
 	if v == "" {
-		v = "v2.3.0"
+		v = "v2.4.0"
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"version": v})
 }

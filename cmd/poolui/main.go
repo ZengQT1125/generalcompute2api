@@ -33,7 +33,8 @@ func main() {
 	}
 	defer db.Close()
 
-	srv, err := poolui.NewServer(db)
+	store := config.LoadStore()
+	srv, err := poolui.NewServer(db, store)
 	if err != nil {
 		config.Logger.Error("pool ui init failed", "error", err)
 		os.Exit(1)

@@ -287,3 +287,92 @@ func (db *DB) UpdateGatewayKeyMeta(ctx context.Context, apiKey, name, remark str
 	}
 	return nil
 }
+
+// BatchSetAccountDiscarded marks multiple accounts in a pool as discarded or active.
+func (db *DB) BatchSetAccountDiscarded(ctx context.Context, apiKey string, identifiers []string, discarded bool) error {
+	if err := db.configured(); err != nil {
+		return err
+	}
+	apiKey = strings.TrimSpace(apiKey)
+	if len(identifiers) == 0 {
+		return nil
+	}
+	reason := DiscardReasonManual
+	if !discarded {
+		reason = DiscardReasonNone
+	}
+	disc := 0
+	if discarded {
+		disc = 1
+	}
+
+	tx, err := db.sql.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	stmt, err := tx.PrepareContext(ctx, `
+UPDATE pool_accounts
+SET discarded = ?, discard_reason = ?
+WHERE id IN (
+  SELECT pa.id FROM pool_accounts pa
+  INNER JOIN pool_bindings pb ON pb.account_id = pa.id
+  WHERE pb.api_key = ? AND pa.identifier = ?
+)
+`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, ident := range identifiers {
+		ident = strings.TrimSpace(ident)
+		if ident == "" {
+			continue
+		}
+		if _, err := stmt.ExecContext(ctx, disc, reason, apiKey, ident); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+// BatchRemoveAccountsFromPool removes multiple bindings from a gateway key's pool.
+func (db *DB) BatchRemoveAccountsFromPool(ctx context.Context, apiKey string, identifiers []string) error {
+	if err := db.configured(); err != nil {
+		return err
+	}
+	apiKey = strings.TrimSpace(apiKey)
+	if len(identifiers) == 0 {
+		return nil
+	}
+
+	tx, err := db.sql.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	stmt, err := tx.PrepareContext(ctx, `
+DELETE FROM pool_bindings
+WHERE api_key = ? AND account_id IN (SELECT id FROM pool_accounts WHERE identifier = ?)
+`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, ident := range identifiers {
+		ident = strings.TrimSpace(ident)
+		if ident == "" {
+			continue
+		}
+		if _, err := stmt.ExecContext(ctx, apiKey, ident); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
