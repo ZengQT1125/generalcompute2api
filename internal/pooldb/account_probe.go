@@ -15,6 +15,7 @@ import (
 type PoolAccountCredential struct {
 	Identifier string
 	Password   string
+	Token      string
 	Discarded  bool
 }
 
@@ -29,11 +30,11 @@ func (db *DB) GetPoolAccountCredential(ctx context.Context, apiKey, identifier s
 	var discarded int
 	var password, cookie, sessionID, orgID string
 	err := db.sql.QueryRowContext(ctx, `
-SELECT pa.identifier, pa.password, COALESCE(pa.cookie, ''), COALESCE(pa.session_id, ''), COALESCE(pa.organization_id, ''), COALESCE(pa.discarded, 0)
+SELECT pa.identifier, pa.password, COALESCE(pa.token, ''), COALESCE(pa.cookie, ''), COALESCE(pa.session_id, ''), COALESCE(pa.organization_id, ''), COALESCE(pa.discarded, 0)
 FROM pool_bindings pb
 INNER JOIN pool_accounts pa ON pa.id = pb.account_id
 WHERE pb.api_key = ? AND pa.identifier = ?
-`, apiKey, identifier).Scan(&cred.Identifier, &password, &cookie, &sessionID, &orgID, &discarded)
+`, apiKey, identifier).Scan(&cred.Identifier, &password, &cred.Token, &cookie, &sessionID, &orgID, &discarded)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return PoolAccountCredential{}, fmt.Errorf("account not in pool")
@@ -67,7 +68,7 @@ func (db *DB) ListPoolAccountCredentials(ctx context.Context, apiKey string, ide
 	}
 	apiKey = strings.TrimSpace(apiKey)
 	q := `
-SELECT pa.identifier, pa.password, COALESCE(pa.cookie, ''), COALESCE(pa.session_id, ''), COALESCE(pa.organization_id, ''), COALESCE(pa.discarded, 0)
+SELECT pa.identifier, pa.password, COALESCE(pa.token, ''), COALESCE(pa.cookie, ''), COALESCE(pa.session_id, ''), COALESCE(pa.organization_id, ''), COALESCE(pa.discarded, 0)
 FROM pool_bindings pb
 INNER JOIN pool_accounts pa ON pa.id = pb.account_id
 WHERE pb.api_key = ?`
@@ -93,7 +94,7 @@ WHERE pb.api_key = ?`
 		var cred PoolAccountCredential
 		var discarded int
 		var password, cookie, sessionID, orgID string
-		if err := rows.Scan(&cred.Identifier, &password, &cookie, &sessionID, &orgID, &discarded); err != nil {
+		if err := rows.Scan(&cred.Identifier, &password, &cred.Token, &cookie, &sessionID, &orgID, &discarded); err != nil {
 			return nil, err
 		}
 		cred.Discarded = discarded != 0

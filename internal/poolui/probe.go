@@ -10,7 +10,6 @@ import (
 
 	"generalcompute2api/internal/auth"
 	"generalcompute2api/internal/config"
-	dsclient "generalcompute2api/internal/deepseek/client"
 	glclient "generalcompute2api/internal/gl/client"
 	"generalcompute2api/internal/poolaccounthealth"
 	"generalcompute2api/internal/pooldb"
@@ -53,52 +52,57 @@ func (s *Server) probeOneAccount(ctx context.Context, apiKey string, cred pooldb
 	}
 
 	var acc config.Account
-	isGL := false
-	if strings.HasPrefix(strings.TrimSpace(cred.Password), "{") {
-		var extra struct {
-			Password       string `json:"password"`
-			Cookie         string `json:"cookie"`
-			SessionID      string `json:"session_id"`
-			OrganizationID string `json:"organization_id"`
-		}
-		if err := json.Unmarshal([]byte(cred.Password), &extra); err == nil {
-			acc.Cookie = extra.Cookie
-			acc.SessionID = extra.SessionID
-			acc.OrganizationID = extra.OrganizationID
+	var extra struct {
+		Password       string `json:"password"`
+		Cookie         string `json:"cookie"`
+		SessionID      string `json:"session_id"`
+		OrganizationID string `json:"organization_id"`
+	}
+	if err := json.Unmarshal([]byte(cred.Password), &extra); err != nil {
+		row.Skipped = true
+		row.Message = "解析凭证 JSON 失败，可能非有效 Clerk 凭证格式"
+		return row
+	}
+	acc.Email = cred.Identifier
+	acc.Cookie = extra.Cookie
+	acc.SessionID = extra.SessionID
+	acc.OrganizationID = extra.OrganizationID
 
-			if acc.Cookie != "" || acc.SessionID != "" || acc.OrganizationID != "" {
-				isGL = true
-			}
-		}
+	if strings.TrimSpace(acc.Cookie) == "" || strings.TrimSpace(acc.SessionID) == "" || strings.TrimSpace(acc.OrganizationID) == "" {
+		row.Skipped = true
+		row.Message = "缺少 Clerk 会话要素 (cookie/session_id/organization_id)"
+		return row
 	}
 
 	var jwt string
 	var err error
 
-	if isGL {
-		// 动态检测：属于 GL Clerk 会话账号，直接使用 glclient 刷新 Token 进行测号
-		gl := glclient.NewClient(nil, nil)
+	// 纯 GL Clerk 测号逻辑，使用 glclient
+	gl := glclient.NewClient(s.Store, nil)
+	useExistingToken := strings.TrimSpace(cred.Token) != ""
+	jwt = cred.Token
+
+	var probeErr error
+	if useExistingToken {
+		probeErr = probeGLChat(ctx, gl, cred.Identifier, jwt)
+	}
+
+	if !useExistingToken || probeErr != nil {
 		jwt, err = gl.Login(ctx, acc)
 		if err == nil {
-			if probeErr := probeGLChat(ctx, gl, cred.Identifier, jwt); probeErr != nil {
-				config.Logger.Warn("[poolui] GL chat probe failed after token refresh; keeping account available", "account", cred.Identifier, "model", glProbeModel, "error", probeErr)
+			probeErr = probeGLChat(ctx, gl, cred.Identifier, jwt)
+			if probeErr != nil {
+				err = probeErr
 			}
+		} else {
+			err = fmt.Errorf("GL Clerk login failed: %w", err)
 		}
-	} else {
-		// 属于普通 DeepSeek 官方账号，走 dsclient 的账号密码登陆测号
-		acc.Email = cred.Identifier
-		acc.Password = cred.Password
-		ds := dsclient.NewClient(nil, nil)
-		jwt, err = ds.Login(ctx, acc)
 	}
 
 	if err != nil {
 		row.OK = false
 		row.Message = err.Error()
-		reason := pooldb.DiscardReasonBanned
-		if isGL {
-			reason = discardReasonFromGLProbeError(err.Error())
-		}
+		reason := discardReasonFromGLProbeError(err.Error())
 		if reason != "" {
 			row.PoolStatus = reason
 			row.DiscardReason = reason

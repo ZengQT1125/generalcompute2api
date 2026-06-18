@@ -2,6 +2,7 @@ package pooldb
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -114,5 +115,30 @@ func (db *DB) ClearAccountToken(ctx context.Context, identifier string) error {
 		return nil
 	}
 	_, err := db.sql.ExecContext(ctx, `UPDATE pool_accounts SET token = ? WHERE identifier = ?`, "", identifier)
+	return err
+}
+
+// UpdateAccountClerkCredentials persists refreshed Clerk credential materials back to database.
+func (db *DB) UpdateAccountClerkCredentials(ctx context.Context, identifier, cookie, sessionID, orgID string) error {
+	if err := db.configured(); err != nil {
+		return err
+	}
+	identifier = strings.TrimSpace(identifier)
+	if identifier == "" {
+		return fmt.Errorf("empty identifier")
+	}
+	m := map[string]string{
+		"cookie":          cookie,
+		"session_id":      sessionID,
+		"organization_id": orgID,
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	_, err = db.sql.ExecContext(ctx, `
+UPDATE pool_accounts
+SET cookie = ?, session_id = ?, organization_id = ?, password = ?
+WHERE identifier = ?`, cookie, sessionID, orgID, string(b), identifier)
 	return err
 }

@@ -62,8 +62,8 @@ func NewApp() (*App, error) {
 	config.Logger.Info("[pooldb] cleaned legacy gateway keys and bindings to ensure complete purity")
 	glClient = glclient.NewClient(store, resolver)
 
-	// 初始化合并的 poolui 服务进程
-	uiServer, err := poolui.NewServer(poolDB)
+	// 初始化合并 of poolui 服务进程
+	uiServer, err := poolui.NewServer(poolDB, store)
 	if err != nil {
 		return nil, fmt.Errorf("initialize poolui server: %w", err)
 	}

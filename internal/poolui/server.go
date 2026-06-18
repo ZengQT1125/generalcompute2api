@@ -21,15 +21,16 @@ type Server struct {
 	DB     *pooldb.DB
 	Token  string
 	Router http.Handler
+	Store  *config.Store
 }
 
-func NewServer(db *pooldb.DB) (*Server, error) {
+func NewServer(db *pooldb.DB, store *config.Store) (*Server, error) {
 	token := config.AdminTokenFromEnv()
 	if token == "" {
 		token = "change-me-pool-ui"
 		config.Logger.Warn("[poolui] GENERALCOMPUTE2API_ADMIN_TOKEN unset; using default (unsafe)")
 	}
-	s := &Server{DB: db, Token: token}
+	s := &Server{DB: db, Token: token, Store: store}
 	if n, err := db.ResetAllRunningAccountTestJobs(context.Background()); err != nil {
 		return nil, fmt.Errorf("reset stale account test jobs: %w", err)
 	} else if n > 0 {
@@ -420,7 +421,7 @@ func (s *Server) restoreAccount(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getVersion(w http.ResponseWriter, r *http.Request) {
 	v := version.BuildVersion
 	if v == "" {
-		v = "v2.2.3"
+		v = "v2.2.7"
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"version": v})
 }
