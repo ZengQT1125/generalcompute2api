@@ -7,6 +7,7 @@ import (
 	"io"
 	"mime/quotedprintable"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"os"
 	"regexp"
@@ -62,6 +63,60 @@ func extractClientCookie(cookieStr string) string {
 	}
 
 	return cookieStr
+}
+
+func seedCookieJarFromHeader(jar *cookiejar.Jar, rawURL, cookieHeader string) {
+	if jar == nil {
+		return
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return
+	}
+	var cookies []*http.Cookie
+	for _, part := range strings.Split(cookieHeader, ";") {
+		name, value, ok := strings.Cut(strings.TrimSpace(part), "=")
+		if !ok {
+			continue
+		}
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		cookies = append(cookies, &http.Cookie{Name: name, Value: strings.TrimSpace(value), Path: "/"})
+	}
+	if len(cookies) > 0 {
+		jar.SetCookies(u, cookies)
+	}
+}
+
+func logJarCookies(stage string, jar *cookiejar.Jar, rawURL string) {
+	if jar == nil {
+		return
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return
+	}
+	for _, cookie := range jar.Cookies(u) {
+		config.Logger.Info("[glclient] CookieJar 状态", "stage", stage, "host", u.Host, "name", cookie.Name, "value_len", len(cookie.Value))
+	}
+}
+
+func jarCookieValue(jar *cookiejar.Jar, rawURL, name string) string {
+	if jar == nil {
+		return ""
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+	for _, cookie := range jar.Cookies(u) {
+		if cookie.Name == name {
+			return cookie.Value
+		}
+	}
+	return ""
 }
 
 // Login 完美实现了 auth.Resolver 所需的 LoginFunc 接口签名，实现 Clerk JWT 动态刷新，并带有 Magic Link 自动登录自愈能力
@@ -168,7 +223,22 @@ func (c *Client) AutoLoginMagicLink(ctx context.Context, acc config.Account) (ne
 		workerAuth = "1125"
 	}
 
-	httpClient := c.getClientForAccount(acc)
+	baseHTTPClient := c.getClientForAccount(acc)
+	loginJar, err := cookiejar.New(nil)
+	if err != nil {
+		return "", "", "", fmt.Errorf("create login cookie jar failed: %w", err)
+	}
+	httpClient := &http.Client{
+		Transport: baseHTTPClient.Transport,
+		Timeout:   baseHTTPClient.Timeout,
+		Jar:       loginJar,
+	}
+	if httpClient.Timeout == 0 {
+		httpClient.Timeout = 30 * time.Second
+	}
+	oldCookie := extractClientCookie(acc.Cookie)
+	seedCookieJarFromHeader(loginJar, "https://clerk.generalcompute.com/", oldCookie)
+	logJarCookies("before_sign_ins", loginJar, "https://clerk.generalcompute.com/")
 
 	config.Logger.Info("[glclient] 步骤1/4: 正在向 Clerk 触发发送登录 Magic Link 邮件...", "email", email)
 
@@ -188,10 +258,6 @@ func (c *Client) AutoLoginMagicLink(ctx context.Context, acc config.Account) (ne
 	req.Header.Set("Origin", "https://app.generalcompute.com")
 	req.Header.Set("Referer", "https://app.generalcompute.com/")
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36")
-	oldCookie := extractClientCookie(acc.Cookie)
-	if oldCookie != "" {
-		req.Header.Set("Cookie", oldCookie)
-	}
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -207,10 +273,12 @@ func (c *Client) AutoLoginMagicLink(ctx context.Context, acc config.Account) (ne
 	// 提取初始 __client Cookie 值（若有）
 	var initialClientCookie string
 	for _, cookie := range resp.Cookies() {
+		config.Logger.Info("[glclient] sign_ins 响应中解析到 Cookie", "name", cookie.Name, "value_len", len(cookie.Value))
 		if cookie.Name == "__client" {
 			initialClientCookie = cookie.Value
 		}
 	}
+	logJarCookies("after_sign_ins", loginJar, "https://clerk.generalcompute.com/")
 
 	var signInResp struct {
 		Response struct {
@@ -266,14 +334,6 @@ func (c *Client) AutoLoginMagicLink(ctx context.Context, acc config.Account) (ne
 	prepareReq.Header.Set("Referer", "https://app.generalcompute.com/")
 	prepareReq.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36")
 
-	activeOldCookie := oldCookie
-	if initialClientCookie != "" {
-		activeOldCookie = "__client=" + initialClientCookie
-	}
-	if activeOldCookie != "" {
-		prepareReq.Header.Set("Cookie", activeOldCookie)
-	}
-
 	prepareResp, err := httpClient.Do(prepareReq)
 	if err != nil {
 		return "", "", "", fmt.Errorf("prepare first factor failed: %w", err)
@@ -287,10 +347,12 @@ func (c *Client) AutoLoginMagicLink(ctx context.Context, acc config.Account) (ne
 
 	// 再次提取最新的 __client Cookie 值（若有）
 	for _, cookie := range prepareResp.Cookies() {
+		config.Logger.Info("[glclient] prepare_first_factor 响应中解析到 Cookie", "name", cookie.Name, "value_len", len(cookie.Value))
 		if cookie.Name == "__client" {
 			initialClientCookie = cookie.Value
 		}
 	}
+	logJarCookies("after_prepare_first_factor", loginJar, "https://clerk.generalcompute.com/")
 
 	config.Logger.Info("[glclient] 步骤2/4: Clerk 邮件已发送，开始轮询 Workers 临时邮箱提取 Magic Link...", "email", email)
 
@@ -383,16 +445,30 @@ func (c *Client) AutoLoginMagicLink(ctx context.Context, acc config.Account) (ne
 	redirectInterceptor := &http.Client{
 		Timeout:   20 * time.Second,
 		Transport: proxyTransport,
+		Jar:       loginJar,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) > 0 && req.Response != nil {
+				config.Logger.Info("[glclient] 拦截到重定向响应", "status", req.Response.Status, "url", req.Response.Request.URL.String())
 				for _, cookie := range req.Response.Cookies() {
+					config.Logger.Info("[glclient] 重定向响应中解析到 Cookie", "name", cookie.Name, "value_len", len(cookie.Value))
 					if cookie.Name == "__client" {
 						capturedClientCookie = cookie.Value
 					}
 				}
-			}
-			if capturedClientCookie != "" {
-				req.Header.Set("Cookie", "__client="+capturedClientCookie)
+				for _, setCookie := range req.Response.Header["Set-Cookie"] {
+					config.Logger.Info("[glclient] 重定向响应包含 Set-Cookie Header", "value_len", len(setCookie))
+					if strings.Contains(setCookie, "__client=") {
+						parts := strings.Split(setCookie, ";")
+						for _, p := range parts {
+							p = strings.TrimSpace(p)
+							if strings.HasPrefix(p, "__client=") {
+								capturedClientCookie = strings.TrimPrefix(p, "__client=")
+								config.Logger.Info("[glclient] 成功从 Raw Header 中强力捕获到 __client Cookie", "value_len", len(capturedClientCookie))
+							}
+						}
+					}
+				}
+				logJarCookies("during_verify_redirect", loginJar, "https://clerk.generalcompute.com/")
 			}
 			return nil
 		},
@@ -402,11 +478,19 @@ func (c *Client) AutoLoginMagicLink(ctx context.Context, acc config.Account) (ne
 	if err != nil {
 		return "", "", "", err
 	}
-	activateReq.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8")
+	activateReq.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
+	activateReq.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7")
+	activateReq.Header.Set("Connection", "keep-alive")
+	activateReq.Header.Set("Upgrade-Insecure-Requests", "1")
 	activateReq.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36")
-	if initialClientCookie != "" {
-		activateReq.Header.Set("Cookie", "__client="+initialClientCookie)
-	}
+	activateReq.Header.Set("Sec-Ch-Ua", `"Not(A:Brand";v="99", "Google Chrome";v="149", "Chromium";v="149"`)
+	activateReq.Header.Set("Sec-Ch-Ua-Mobile", "?0")
+	activateReq.Header.Set("Sec-Ch-Ua-Platform", `"Windows"`)
+	activateReq.Header.Set("Sec-Fetch-Dest", "document")
+	activateReq.Header.Set("Sec-Fetch-Mode", "navigate")
+	activateReq.Header.Set("Sec-Fetch-Site", "none")
+	activateReq.Header.Set("Sec-Fetch-User", "?1")
+	logJarCookies("before_verify", loginJar, magicLink)
 
 	activateResp, err := redirectInterceptor.Do(activateReq)
 	if err != nil {
@@ -414,16 +498,37 @@ func (c *Client) AutoLoginMagicLink(ctx context.Context, acc config.Account) (ne
 	}
 	defer activateResp.Body.Close()
 
+	config.Logger.Info("[glclient] 激活请求完成", "status", activateResp.Status, "final_url", activateResp.Request.URL.String())
+
 	var loggedInClientCookie string
 	for _, cookie := range activateResp.Cookies() {
+		config.Logger.Info("[glclient] 最终响应中解析到 Cookie", "name", cookie.Name, "value_len", len(cookie.Value))
 		if cookie.Name == "__client" {
 			loggedInClientCookie = cookie.Value
 		}
 	}
 
+	for _, setCookie := range activateResp.Header["Set-Cookie"] {
+		config.Logger.Info("[glclient] 最终响应包含 Set-Cookie Header", "value_len", len(setCookie))
+		if strings.Contains(setCookie, "__client=") {
+			parts := strings.Split(setCookie, ";")
+			for _, p := range parts {
+				p = strings.TrimSpace(p)
+				if strings.HasPrefix(p, "__client=") {
+					loggedInClientCookie = strings.TrimPrefix(p, "__client=")
+					config.Logger.Info("[glclient] 成功从最终 Raw Header 中强力捕获到 __client Cookie", "value_len", len(loggedInClientCookie))
+				}
+			}
+		}
+	}
+	logJarCookies("after_verify", loginJar, "https://clerk.generalcompute.com/")
+
 	activeCookie := loggedInClientCookie
 	if activeCookie == "" {
 		activeCookie = capturedClientCookie
+	}
+	if activeCookie == "" {
+		activeCookie = jarCookieValue(loginJar, "https://clerk.generalcompute.com/", "__client")
 	}
 	if activeCookie == "" {
 		activeCookie = initialClientCookie

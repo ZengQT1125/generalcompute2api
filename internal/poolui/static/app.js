@@ -1121,10 +1121,10 @@ async function loadVersion() {
   try {
     const data = await api("/api/version");
     const el = $("#versionBadge");
-    if (el) el.textContent = data.version || "v2.2.3";
+    if (el) el.textContent = data.version || "v2.3.0";
   } catch (_) {
     const el = $("#versionBadge");
-    if (el) el.textContent = "v2.2.3";
+    if (el) el.textContent = "v2.3.0";
   }
 }
 
