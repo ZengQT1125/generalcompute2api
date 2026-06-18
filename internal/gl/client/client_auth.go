@@ -12,6 +12,11 @@ import (
 	"generalcompute2api/internal/config"
 )
 
+const (
+	clerkAPIVersion = "2025-11-10"
+	clerkJSVersion  = "5.125.13"
+)
+
 // Login 完美实现了 auth.Resolver 所需的 LoginFunc 接口签名，实现 Clerk JWT 动态刷新
 func (c *Client) Login(ctx context.Context, acc config.Account) (string, error) {
 	cookie := strings.TrimSpace(acc.Cookie)
@@ -23,6 +28,10 @@ func (c *Client) Login(ctx context.Context, acc config.Account) (string, error) 
 	}
 
 	clerkURL := fmt.Sprintf("https://clerk.generalcompute.com/v1/client/sessions/%s/tokens", sessionID)
+	q := url.Values{}
+	q.Set("__clerk_api_version", clerkAPIVersion)
+	q.Set("_clerk_js_version", clerkJSVersion)
+	clerkURL += "?" + q.Encode()
 
 	formData := url.Values{}
 	formData.Set("organization_id", orgID)
@@ -33,11 +42,14 @@ func (c *Client) Login(ctx context.Context, acc config.Account) (string, error) 
 	}
 
 	req.Header.Set("Accept", "*/*")
+	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7")
+	req.Header.Set("Cache-Control", "no-cache")
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Cookie", cookie)
 	req.Header.Set("Origin", "https://app.generalcompute.com")
+	req.Header.Set("Pragma", "no-cache")
 	req.Header.Set("Referer", "https://app.generalcompute.com/")
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36")
 
 	resp, err := c.HttpClient.Do(req)
 	if err != nil {

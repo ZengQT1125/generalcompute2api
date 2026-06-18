@@ -92,7 +92,7 @@ func TestCallCompletionFailoversOnUpstream5xx(t *testing.T) {
 	}
 }
 
-func TestCallCompletionMapsMinimaxModelForUpstream(t *testing.T) {
+func TestCallCompletionKeepsMinimaxModelForUpstream(t *testing.T) {
 	resolver := newGLTestResolver([]config.Account{
 		{Email: "good@example.com", Token: "good-token"},
 	})
@@ -120,8 +120,8 @@ func TestCallCompletionMapsMinimaxModelForUpstream(t *testing.T) {
 		t.Fatalf("call completion failed: %v", err)
 	}
 	defer resp.Body.Close()
-	if upstreamModel != "minimax2.7" {
-		t.Fatalf("expected upstream minimax2.7, got %q", upstreamModel)
+	if upstreamModel != "minimax-m2.7" {
+		t.Fatalf("expected upstream minimax-m2.7, got %q", upstreamModel)
 	}
 	if payload["model"] != "minimax-m2.7" {
 		t.Fatalf("expected canonical payload model, got %q", payload["model"])

@@ -152,7 +152,7 @@ func normalizeGLModel(model string) (canonical string, upstream string, ok bool)
 	case "deepseek-v3.1":
 		return "deepseek-v3.1", "deepseek-v3.1", true
 	case "minimax-m2.7", "minimax2.7", "minimax-2.7", "minimax-m2-7":
-		return "minimax-m2.7", "minimax2.7", true
+		return "minimax-m2.7", "minimax-m2.7", true
 	default:
 		return "", "", false
 	}
