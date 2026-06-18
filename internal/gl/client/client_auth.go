@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -134,6 +135,39 @@ func jarCookieValue(jar *cookiejar.Jar, rawURL, name string) string {
 		}
 	}
 	return ""
+}
+
+func magicLinkSignInID(link string) string {
+	link = strings.ReplaceAll(strings.TrimSpace(link), "&amp;", "&")
+	u, err := url.Parse(link)
+	if err != nil {
+		return ""
+	}
+	token := strings.TrimSpace(u.Query().Get("token"))
+	parts := strings.Split(token, ".")
+	if len(parts) < 2 {
+		return ""
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return ""
+	}
+	var claims struct {
+		SignInID string `json:"sid"`
+	}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(claims.SignInID)
+}
+
+func magicLinkMatchesSignInID(link, signInID string) bool {
+	signInID = strings.TrimSpace(signInID)
+	if signInID == "" {
+		return true
+	}
+	linkSignInID := magicLinkSignInID(link)
+	return linkSignInID == signInID
 }
 
 func (c *Client) clerkCredentialDB() (*pooldb.DB, bool) {
@@ -430,16 +464,22 @@ func (c *Client) AutoLoginMagicLink(ctx context.Context, acc config.Account) (ne
 								decodedBody := parseAndDecodeRawEmail(rawStr)
 								match := linkRegex.FindString(decodedBody)
 								if match != "" {
-									magicLink = match
-									break
+									if magicLinkMatchesSignInID(match, signInID) {
+										magicLink = match
+										break
+									}
+									config.Logger.Info("[glclient] 跳过非本次 sign-in 的旧 Magic Link", "expected_sign_in_id", signInID, "link_sign_in_id", magicLinkSignInID(match))
 								}
 								// 兜底正则
 								backupRegex := regexp.MustCompile(`https?://[^\s"'<>]*?token=[A-Za-z0-9%_.-]+`)
 								matches := backupRegex.FindAllString(decodedBody, -1)
 								for _, link := range matches {
 									if strings.Contains(link, "accept") || strings.Contains(link, "sign_in") || strings.Contains(link, "clerk") {
-										magicLink = link
-										break
+										if magicLinkMatchesSignInID(link, signInID) {
+											magicLink = link
+											break
+										}
+										config.Logger.Info("[glclient] 跳过非本次 sign-in 的旧 Magic Link", "expected_sign_in_id", signInID, "link_sign_in_id", magicLinkSignInID(link))
 									}
 								}
 							}
