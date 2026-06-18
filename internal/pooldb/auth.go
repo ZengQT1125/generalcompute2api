@@ -136,9 +136,19 @@ func (db *DB) UpdateAccountClerkCredentials(ctx context.Context, identifier, coo
 	if err != nil {
 		return err
 	}
-	_, err = db.sql.ExecContext(ctx, `
+	res, err := db.sql.ExecContext(ctx, `
 UPDATE pool_accounts
 SET cookie = ?, session_id = ?, organization_id = ?, password = ?
 WHERE identifier = ?`, cookie, sessionID, orgID, string(b), identifier)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("pool account not found for identifier %q", identifier)
+	}
 	return err
 }

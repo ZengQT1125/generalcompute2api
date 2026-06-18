@@ -136,6 +136,14 @@ func jarCookieValue(jar *cookiejar.Jar, rawURL, name string) string {
 	return ""
 }
 
+func (c *Client) clerkCredentialDB() (*pooldb.DB, bool) {
+	if c == nil || c.Auth == nil || c.Auth.PoolDB == nil {
+		return nil, false
+	}
+	dbConn, ok := c.Auth.PoolDB.(*pooldb.DB)
+	return dbConn, ok
+}
+
 // Login 完美实现了 auth.Resolver 所需的 LoginFunc 接口签名，实现 Clerk JWT 动态刷新，并带有 Magic Link 自动登录自愈能力
 func (c *Client) Login(ctx context.Context, acc config.Account) (string, error) {
 	cookie := extractClientCookie(acc.Cookie)
@@ -190,11 +198,14 @@ func (c *Client) Login(ctx context.Context, acc config.Account) (string, error) 
 				config.Logger.Info("[glclient] Auto-Login via Magic Link succeeded! Retrying Clerk Token fetch...", "email", acc.Email)
 
 				// 回写新获取的会话凭证到 SQLite 数据库中
-				if c.Auth != nil && c.Auth.PoolDB != nil {
-					if dbConn, ok := c.Auth.PoolDB.(*pooldb.DB); ok {
-						_ = dbConn.UpdateAccountClerkCredentials(ctx, acc.Email, newCookie, newSessionID, newOrgID)
-					}
+				dbConn, ok := c.clerkCredentialDB()
+				if !ok {
+					return "", fmt.Errorf("auto-login succeeded but refreshed Clerk credentials cannot be persisted")
 				}
+				if err := dbConn.UpdateAccountClerkCredentials(ctx, acc.Email, newCookie, newSessionID, newOrgID); err != nil {
+					return "", fmt.Errorf("persist refreshed Clerk credentials: %w", err)
+				}
+				config.Logger.Info("[glclient] Refreshed Clerk credentials persisted", "email", acc.Email, "session_id", newSessionID, "org_id", newOrgID)
 
 				// 用最新凭证重新发起登录
 				acc.Cookie = newCookie
