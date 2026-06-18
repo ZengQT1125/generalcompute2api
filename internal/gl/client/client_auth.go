@@ -300,7 +300,7 @@ func (c *Client) AutoLoginMagicLink(ctx context.Context, acc config.Account) (ne
 	timeout := 120 * time.Second
 	interval := 4 * time.Second
 	mailURL := fmt.Sprintf("%s/admin/mails?limit=20&offset=0&address=%s", workerBase, email)
-	linkRegex := regexp.MustCompile(`https?://[a-zA-Z0-9][-a-zA-Z0-9.]{0,62}\/v1\/client\/sign_ins\/[^\s"<>]*?token=[A-Za-z0-9%_.-]+`)
+	linkRegex := regexp.MustCompile(`https?://[a-zA-Z0-9][-a-zA-Z0-9.]{0,62}/v1/(?:verify|client/sign_ins)[^\s"<>]*?token=[A-Za-z0-9%_.-]+`)
 
 	pollCount := 0
 	for time.Since(pollStart) < timeout {
@@ -372,6 +372,8 @@ func (c *Client) AutoLoginMagicLink(ctx context.Context, acc config.Account) (ne
 	if magicLink == "" {
 		return "", "", "", fmt.Errorf("fetching verification email or extracting magic link timed out")
 	}
+
+	magicLink = strings.ReplaceAll(magicLink, "&amp;", "&")
 
 	config.Logger.Info("[glclient] 步骤3/4: 成功提取到 Magic Link, 正在激活并拦截重定向捕获最新的 __client Cookie...", "magic_link", magicLink)
 
