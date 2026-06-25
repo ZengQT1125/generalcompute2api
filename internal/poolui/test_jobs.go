@@ -28,12 +28,7 @@ func (s *Server) getAccountTestJob(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) cancelAccountTestJob(w http.ResponseWriter, r *http.Request) {
 	apiKey := routeAPIKey(r)
-	ctx := r.Context()
 	testRunnerFor(apiKey).stop()
-	if err := s.DB.ResetAccountTestJob(ctx, apiKey); err != nil {
-		writeErr(w, err)
-		return
-	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "status": pooldb.TestJobStatusIdle})
 }
 

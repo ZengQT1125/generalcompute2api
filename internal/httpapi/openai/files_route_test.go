@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -39,6 +40,8 @@ func (managedFilesAuthStub) DetermineCaller(_ *http.Request) (*auth.RequestAuth,
 }
 
 func (managedFilesAuthStub) Release(_ *auth.RequestAuth) {}
+
+func (managedFilesAuthStub) MarkAccountCooldown(_ string, _ time.Duration) {}
 
 type filesRouteDSStub struct {
 	lastReq dsclient.UploadFileRequest

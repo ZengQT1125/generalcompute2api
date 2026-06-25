@@ -1286,10 +1286,10 @@ async function loadVersion() {
   try {
     const data = await api("/api/version");
     const el = $("#versionBadge");
-    if (el) el.textContent = data.version || "v2.5.0";
+    if (el) el.textContent = data.version || "v2.5.1";
   } catch (_) {
     const el = $("#versionBadge");
-    if (el) el.textContent = "v2.5.0";
+    if (el) el.textContent = "v2.5.1";
   }
 }
 

@@ -89,5 +89,5 @@ func newTestApp(t *testing.T, pool auth.GatewayPool) *App {
 	r.Post("/embeddings", embeddingsHandler.Embeddings)
 	r.NotFound(http.NotFound)
 
-	return &App{Store: store, Resolver: resolver, DS: dsClient, Router: r}
+	return &App{Store: store, Resolver: resolver, Router: r}
 }

@@ -19,13 +19,13 @@ func TestResolveModelMinimaxWebAliases(t *testing.T) {
 }
 
 func TestResolveModelRejectsPro(t *testing.T) {
-	if got, ok := ResolveModel("deepseek-v4-pro"); ok {
-		t.Fatalf("expected deepseek-v4-pro to be rejected, got %q", got)
+	if got, ok := ResolveModel("deepseek-v5-pro"); ok {
+		t.Fatalf("expected deepseek-v5-pro to be rejected, got %q", got)
 	}
 }
 
 func TestResolveModelRejectsNoThinkingSuffix(t *testing.T) {
-	for _, model := range []string{"deepseek-v4-flash-nothinking", "deepseek-v4-pro-nothinking"} {
+	for _, model := range []string{"deepseek-v5-flash-nothinking", "deepseek-v5-pro-nothinking"} {
 		if got, ok := ResolveModel(model); ok {
 			t.Fatalf("expected %q to be rejected, got %q", model, got)
 		}
@@ -42,11 +42,11 @@ func TestOpenAIModelByIDPreservesGLModelID(t *testing.T) {
 func TestResolveModelRejectsUnknownAliases(t *testing.T) {
 	for _, model := range []string{
 		"gpt-4.1",
-		"gpt-4o",
+		"gpt-5",
 		"claude-sonnet-4-6",
 		"gemini-2.5-pro",
 		"deepseek-chat",
-		"deepseek-v4-pro",
+		"deepseek-v5-pro",
 	} {
 		if got, ok := ResolveModel(model); ok {
 			t.Fatalf("expected %q to be rejected, got %q", model, got)

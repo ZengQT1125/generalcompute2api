@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  deepseek-2api:
+    build: .
+    container_name: deepseek-2api
+    restart: always
+    ports:
+      - "7981:3000"
+    volumes:
+      - ./logs:/app/logs
+      - ./.env:/app/.env

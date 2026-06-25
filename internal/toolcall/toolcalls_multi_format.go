@@ -266,7 +266,35 @@ func parseJSONBlockMarkdown(text string, availableToolNames []string) ([]ParsedT
 	if trimmed == "" {
 		return nil, false
 	}
-	return parseJSONToolCalls([]byte(trimmed), availableToolNames)
+
+	// 安全校验：对于没有 XML 标签修饰的 Markdown JSON 块，
+	// 如果顶层是 "tool_calls" / "tools" / "calls" 这种数组结构的 JSON，
+	// 我们认为它是普通对话在展示工具调用示例，而不是真正的工具调用，从而忽略它。
+	var raw any
+	if err := json.Unmarshal([]byte(trimmed), &raw); err == nil {
+		if m, ok := raw.(map[string]any); ok {
+			for _, key := range []string{"tool_calls", "tools", "calls"} {
+				if _, exists := m[key]; exists {
+					return nil, false
+				}
+			}
+		}
+	} else {
+		repaired := RepairLooseJSON(trimmed)
+		if err2 := json.Unmarshal([]byte(repaired), &raw); err2 == nil {
+			if m, ok := raw.(map[string]any); ok {
+				for _, key := range []string{"tool_calls", "tools", "calls"} {
+					if _, exists := m[key]; exists {
+						return nil, false
+					}
+				}
+			}
+		} else {
+			return nil, false
+		}
+	}
+
+	return parseJSONToolCallsValue(raw, availableToolNames)
 }
 
 var fnNameRe = regexp.MustCompile(`(?i)function\.name\s*:\s*([^\n\r]+)`)
