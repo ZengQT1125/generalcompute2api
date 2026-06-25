@@ -903,3 +903,60 @@ func TestParseToolCallsSkipsProseMentionOfSameWrapperVariant(t *testing.T) {
 		t.Fatalf("expected command to parse, got %q", got)
 	}
 }
+
+func TestParseToolCallsSupportsNamedXML(t *testing.T) {
+	text := `<tool_call name="get_weather">{"city": "Beijing"}</tool_call>`
+	calls := ParseToolCalls(text, []string{"get_weather"})
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 call, got %#v", calls)
+	}
+	if calls[0].Name != "get_weather" {
+		t.Fatalf("expected get_weather, got %q", calls[0].Name)
+	}
+	if calls[0].Input["city"] != "Beijing" {
+		t.Fatalf("expected Beijing, got %#v", calls[0].Input)
+	}
+}
+
+func TestParseToolCallsSupportsJSONBlockInTags(t *testing.T) {
+	text := `<tool_calls>[{"name": "Bash", "arguments": {"command": "git pull"}}]</tool_calls>`
+	calls := ParseToolCalls(text, []string{"Bash"})
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 call, got %#v", calls)
+	}
+	if calls[0].Name != "Bash" {
+		t.Fatalf("expected Bash, got %q", calls[0].Name)
+	}
+	if calls[0].Input["command"] != "git pull" {
+		t.Fatalf("expected git pull, got %#v", calls[0].Input)
+	}
+}
+
+func TestParseToolCallsSupportsMarkdownJSONBlock(t *testing.T) {
+	text := "```json\n" + `{"name": "Bash", "arguments": {"command": "ls -l"}}` + "\n```"
+	calls := ParseToolCalls(text, []string{"Bash"})
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 call, got %#v", calls)
+	}
+	if calls[0].Name != "Bash" {
+		t.Fatalf("expected Bash, got %q", calls[0].Name)
+	}
+	if calls[0].Input["command"] != "ls -l" {
+		t.Fatalf("expected ls -l, got %#v", calls[0].Input)
+	}
+}
+
+func TestParseToolCallsSupportsTextKVFormat(t *testing.T) {
+	text := "function.name: test_tool\nfunction.arguments: {\"arg1\": \"val1\"}"
+	calls := ParseToolCalls(text, []string{"test_tool"})
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 call, got %#v", calls)
+	}
+	if calls[0].Name != "test_tool" {
+		t.Fatalf("expected test_tool, got %q", calls[0].Name)
+	}
+	if calls[0].Input["arg1"] != "val1" {
+		t.Fatalf("expected val1, got %#v", calls[0].Input)
+	}
+}
+

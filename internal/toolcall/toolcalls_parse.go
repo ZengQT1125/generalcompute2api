@@ -21,11 +21,31 @@ func ParseToolCalls(text string, availableToolNames []string) []ParsedToolCall {
 }
 
 func ParseToolCallsDetailed(text string, availableToolNames []string) ToolCallParseResult {
-	return parseToolCallsDetailedXMLOnly(text)
+	res := parseToolCallsDetailedXMLOnly(text)
+	if len(res.Calls) > 0 {
+		return res
+	}
+	if calls, ok := parseMultiFormatToolCalls(text, availableToolNames); ok && len(calls) > 0 {
+		return ToolCallParseResult{
+			Calls:             calls,
+			SawToolCallSyntax: true,
+		}
+	}
+	return res
 }
 
 func ParseStandaloneToolCallsDetailed(text string, availableToolNames []string) ToolCallParseResult {
-	return parseToolCallsDetailedXMLOnly(text)
+	res := parseToolCallsDetailedXMLOnly(text)
+	if len(res.Calls) > 0 {
+		return res
+	}
+	if calls, ok := parseMultiFormatToolCalls(text, availableToolNames); ok && len(calls) > 0 {
+		return ToolCallParseResult{
+			Calls:             calls,
+			SawToolCallSyntax: true,
+		}
+	}
+	return res
 }
 
 func ParseAssistantToolCallsDetailed(text, thinking string, availableToolNames []string) ToolCallParseResult {
