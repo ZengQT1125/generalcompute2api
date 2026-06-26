@@ -1,5 +1,5 @@
 {
-  "sample_id": "longtext-deepseek-v4-flash-20260429",
+  "sample_id": "longtext-gpt-oss-120b-20260429",
   "captured_at_utc": "2026-04-29T17:51:14Z",
   "source": "admin/dev/raw-samples/capture",
   "request": {
@@ -9,7 +9,7 @@
         "role": "user"
       }
     ],
-    "model": "deepseek-v4-flash",
+    "model": "gpt-oss-120b",
     "stream": true
   },
   "capture": {

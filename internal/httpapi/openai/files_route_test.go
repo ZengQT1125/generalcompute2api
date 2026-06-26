@@ -127,7 +127,7 @@ func TestFilesRouteUploadSuccess(t *testing.T) {
 	r := chi.NewRouter()
 	registerOpenAITestRoutes(r, h)
 
-	req := newMultipartUploadRequest(t, "assistants", "notes.txt", []byte("hello world"), "deepseek-v4-flash")
+	req := newMultipartUploadRequest(t, "assistants", "notes.txt", []byte("hello world"), "gpt-oss-120b")
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -167,7 +167,7 @@ func TestFilesRouteUploadIncludesAccountIDForManagedAccount(t *testing.T) {
 	r := chi.NewRouter()
 	registerOpenAITestRoutes(r, h)
 
-	req := newMultipartUploadRequest(t, "assistants", "notes.txt", []byte("hello world"), "deepseek-v4-flash")
+	req := newMultipartUploadRequest(t, "assistants", "notes.txt", []byte("hello world"), "gpt-oss-120b")
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 

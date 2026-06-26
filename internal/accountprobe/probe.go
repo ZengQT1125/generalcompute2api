@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	defaultProbeModel  = "deepseek-v4-flash"
+	defaultProbeModel  = "gpt-oss-120b"
 	DefaultProbePrompt = "ping, 你只需返回pong"
 )
 

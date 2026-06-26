@@ -18,13 +18,13 @@ var GLModels = []ModelInfo{
 	{ID: "deepseek-v3.2", Object: "model", Created: 1718000000, OwnedBy: "generalcompute", ContextLength: 128000, Permission: []any{}},
 	{ID: "deepseek-v3.1", Object: "model", Created: 1718000000, OwnedBy: "generalcompute", ContextLength: 128000, Permission: []any{}},
 	{ID: "minimax-m2.7", Object: "model", Created: 1718000000, OwnedBy: "generalcompute", ContextLength: 128000, Permission: []any{}},
-	{ID: "deepseek-v4-flash", Object: "model", Created: 1718000000, OwnedBy: "generalcompute", ContextLength: 128000, Permission: []any{}},
+	{ID: "gpt-oss-120b", Object: "model", Created: 1718000000, OwnedBy: "generalcompute", ContextLength: 128000, Permission: []any{}},
 }
 
 func ResolveModel(requested string) (string, bool) {
 	requested = strings.ToLower(strings.TrimSpace(requested))
 	switch requested {
-	case "deepseek-v3.2", "deepseek-v3.1", "minimax-m2.7", "deepseek-v4-flash":
+	case "deepseek-v3.2", "deepseek-v3.1", "minimax-m2.7", "gpt-oss-120b":
 		return requested, true
 	case "minimax2.7", "minimax-2.7", "minimax-m2-7":
 		return "minimax-m2.7", true
