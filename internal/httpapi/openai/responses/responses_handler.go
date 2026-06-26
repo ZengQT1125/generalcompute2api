@@ -87,12 +87,23 @@ func (h *Handler) Responses(w http.ResponseWriter, r *http.Request) {
 		writeOpenAIInlineFileError(w, err)
 		return
 	}
+
+	// 转为 Chat Completions 格式，复用完全相同的上游调用路径
+	chatReq := convertResponsesReqToChat(req)
 	traceID := requestTraceID(r)
-	stdReq, err := promptcompat.NormalizeOpenAIResponsesRequest(req, traceID)
+	stdReq, err := promptcompat.NormalizeOpenAIChatRequest(chatReq, traceID)
 	if err != nil {
 		writeOpenAIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	// 补上 tool_choice（chat normalizer 默认取 auto）
+	if toolPolicy, parseErr := parseResponsesToolChoice(req["tool_choice"], req["tools"]); parseErr == nil {
+		stdReq.ToolChoice = toolPolicy
+		if !toolPolicy.IsNone() && len(toolPolicy.Allowed) > 0 {
+			stdReq.ToolNames = ensureAllowedToolNames(stdReq.ToolNames, toolPolicy.Allowed)
+		}
+	}
+	stdReq.Surface = "openai_responses"
 	stdReq = shared.ApplyThinkingInjection(h.Store, stdReq)
 	stdReq, err = h.applyCurrentInputFile(r.Context(), a, stdReq)
 	if err != nil {
