@@ -157,6 +157,48 @@ func TestProcessToolSieveParsesMinimaxParameterBlock(t *testing.T) {
 	}
 }
 
+func TestProcessToolSieveParsesShellCodeFenceWithoutLeak(t *testing.T) {
+	var state State
+	chunks := []string{
+		"好的，我先看看项目结构。\n",
+		"```pow",
+		"ershell\n",
+		"Get-ChildItem -Path . -Force | Select-Object Name, Mode\n",
+		"```",
+	}
+	var events []Event
+	for _, c := range chunks {
+		events = append(events, ProcessChunk(&state, c, []string{"shell"})...)
+	}
+	events = append(events, Flush(&state, []string{"shell"})...)
+
+	var textContent strings.Builder
+	var calls int
+	var gotCommand string
+	for _, evt := range events {
+		textContent.WriteString(evt.Content)
+		for _, call := range evt.ToolCalls {
+			calls++
+			if call.Name != "shell" {
+				t.Fatalf("expected shell tool call, got %#v", call)
+			}
+			gotCommand, _ = call.Input["command"].(string)
+		}
+	}
+	if calls != 1 {
+		t.Fatalf("expected one shell tool call, got %d events=%#v", calls, events)
+	}
+	if strings.Contains(textContent.String(), "```powershell") || strings.Contains(textContent.String(), "Get-ChildItem") {
+		t.Fatalf("shell fence leaked to text: %q events=%#v", textContent.String(), events)
+	}
+	if !strings.Contains(textContent.String(), "好的") {
+		t.Fatalf("expected leading prose to remain, got %q events=%#v", textContent.String(), events)
+	}
+	if gotCommand != "Get-ChildItem -Path . -Force | Select-Object Name, Mode" {
+		t.Fatalf("expected command argument to parse, got %q", gotCommand)
+	}
+}
+
 func TestProcessToolSieveInterceptsDSMLToolCallWithoutLeak(t *testing.T) {
 	var state State
 	chunks := []string{

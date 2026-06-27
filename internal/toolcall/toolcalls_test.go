@@ -1001,6 +1001,47 @@ func TestParseToolCallsSupportsMarkdownJSONBlock(t *testing.T) {
 	}
 }
 
+func TestParseToolCallsSupportsShellFenceFallback(t *testing.T) {
+	text := strings.Join([]string{
+		"好的，我先看看项目结构。",
+		"```powershell",
+		"Get-ChildItem -Path . -Force | Select-Object Name, Mode",
+		"```",
+	}, "\n")
+	calls := ParseToolCalls(text, []string{"shell"})
+	if len(calls) != 1 {
+		t.Fatalf("expected one shell fence call, got %#v", calls)
+	}
+	if calls[0].Name != "shell" {
+		t.Fatalf("expected shell tool, got %#v", calls[0])
+	}
+	if calls[0].Input["command"] != "Get-ChildItem -Path . -Force | Select-Object Name, Mode" {
+		t.Fatalf("expected command argument, got %#v", calls[0].Input)
+	}
+}
+
+func TestParseToolCallsShellFenceFallbackUsesExecCommandCmd(t *testing.T) {
+	text := "```bash\npwd\n```"
+	calls := ParseToolCalls(text, []string{"exec_command"})
+	if len(calls) != 1 {
+		t.Fatalf("expected one exec_command call, got %#v", calls)
+	}
+	if calls[0].Name != "exec_command" {
+		t.Fatalf("expected exec_command tool, got %#v", calls[0])
+	}
+	if calls[0].Input["cmd"] != "pwd" {
+		t.Fatalf("expected cmd argument, got %#v", calls[0].Input)
+	}
+}
+
+func TestParseToolCallsShellFenceFallbackRequiresShellTool(t *testing.T) {
+	text := "```powershell\nGet-ChildItem\n```"
+	calls := ParseToolCalls(text, []string{"read_file"})
+	if len(calls) != 0 {
+		t.Fatalf("expected no shell fence call without shell-capable tool, got %#v", calls)
+	}
+}
+
 func TestParseToolCallsSupportsTextKVFormat(t *testing.T) {
 	text := "function.name: test_tool\nfunction.arguments: {\"arg1\": \"val1\"}"
 	calls := ParseToolCalls(text, []string{"test_tool"})

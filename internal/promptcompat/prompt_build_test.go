@@ -74,7 +74,7 @@ func TestBuildOpenAIFinalPrompt_KeepsFinalAnswerInstruction(t *testing.T) {
 	}
 
 	finalPrompt, _ := buildOpenAIFinalPrompt(messages, tools, "", false)
-	if !strings.Contains(finalPrompt, "请记住：唯一合法的工具调用方式是在回复末尾使用 <|QNML|tool_calls>...</|QNML|tool_calls> 代码块。") {
+	if !strings.Contains(finalPrompt, "请记住：唯一合法的工具调用方式是使用 <|QNML|tool_calls>...</|QNML|tool_calls> QNML 标记块。") {
 		t.Fatalf("finalPrompt missing final tool-call anchor instruction: %q", finalPrompt)
 	}
 	if !strings.Contains(finalPrompt, "工具调用格式") {
@@ -82,6 +82,9 @@ func TestBuildOpenAIFinalPrompt_KeepsFinalAnswerInstruction(t *testing.T) {
 	}
 	if !strings.Contains(finalPrompt, "不要用 Markdown 代码围栏包裹 XML") {
 		t.Fatalf("finalPrompt missing no-fence xml instruction: %q", finalPrompt)
+	}
+	if !strings.Contains(finalPrompt, "A fenced command is not a tool call") {
+		t.Fatalf("finalPrompt missing no-fence shell instruction: %q", finalPrompt)
 	}
 	if strings.Contains(finalPrompt, "```json") {
 		t.Fatalf("finalPrompt should not require fenced tool calls: %q", finalPrompt)

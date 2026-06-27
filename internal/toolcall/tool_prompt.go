@@ -38,6 +38,7 @@ func BuildToolCallInstructions(toolNames []string) string {
 11）即使随后会闭合 ` + tcC + `，也禁止省略开头的 ` + tcO + ` 标签。
 12）禁止输出 minimaxtool_call、<tool_call>、裸 <invoke> 或任何非 QNML 工具前缀。
 13）兼容说明：运行时仍接受旧版标签 <tool_calls> / <invoke> / <parameter> 以及历史格式 <|ZJML|…> / <|DSML|…>，请优先使用本节的 <|QNML|…> 形式。
+14）禁止把 shell、powershell、bash、cmd 等命令写成 Markdown 代码围栏；代码围栏不会被视为工具调用。需要执行命令时必须输出 ` + tcO + ` 标记块。
 
 参数形态：
 - 字符串 => ` + wrapParameter("x", "<![CDATA[value]]>") + `
@@ -56,8 +57,12 @@ func BuildToolCallInstructions(toolNames []string) string {
 错误 3 — 缺少开头包裹：
   ` + invokeNamed + `...` + ivC + `
   ` + tcC + `
+错误 4 — 把待执行命令写成代码围栏：
+  ` + "```powershell" + `
+  Get-ChildItem -Force
+  ` + "```" + `
 
-请记住：唯一合法的工具调用方式是在回复末尾使用 ` + tcO + `...` + tcC + ` 代码块。
+请记住：唯一合法的工具调用方式是使用 ` + tcO + `...` + tcC + ` QNML 标记块。
 
 ` + buildCorrectToolExamples(toolNames)
 }

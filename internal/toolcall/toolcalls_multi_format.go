@@ -18,27 +18,118 @@ func parseMultiFormatToolCalls(text string, availableToolNames []string) ([]Pars
 		return calls, true
 	}
 
-	// 2. 尝试 Named XML 格式 (例如: <tool_call name="xxx">...</tool_call>)
+	// 2. 尝试把模型误写出的 shell 代码围栏恢复为客户端 shell 工具调用
+	if calls, ok := parseShellFenceToolCalls(trimmed, availableToolNames); ok && len(calls) > 0 {
+		return calls, true
+	}
+
+	// 3. 尝试 Named XML 格式 (例如: <tool_call name="xxx">...</tool_call>)
 	if calls, ok := parseNamedXMLToolCalls(trimmed, availableToolNames); ok && len(calls) > 0 {
 		return calls, true
 	}
 
-	// 3. 尝试从 <tool_calls> 或 <tool_call> 标签中提取 JSON 块解析
+	// 4. 尝试从 <tool_calls> 或 <tool_call> 标签中提取 JSON 块解析
 	if calls, ok := parseJSONBlocksFromTags(trimmed, availableToolNames); ok && len(calls) > 0 {
 		return calls, true
 	}
 
-	// 4. 尝试解析 Markdown 代码围栏内的 JSON 块（或者整体是个 JSON）
+	// 5. 尝试解析 Markdown 代码围栏内的 JSON 块（或者整体是个 JSON）
 	if calls, ok := parseJSONBlockMarkdown(trimmed, availableToolNames); ok && len(calls) > 0 {
 		return calls, true
 	}
 
-	// 5. 尝试解析 TextKV 键值对格式
+	// 6. 尝试解析 TextKV 键值对格式
 	if calls, ok := parseTextKVToolCalls(trimmed, availableToolNames); ok && len(calls) > 0 {
 		return calls, true
 	}
 
 	return nil, false
+}
+
+func parseShellFenceToolCalls(text string, availableToolNames []string) ([]ParsedToolCall, bool) {
+	name := chooseShellFenceToolName(availableToolNames)
+	if name == "" {
+		return nil, false
+	}
+	argName := shellFenceCommandArgumentName(name)
+	lines := strings.SplitAfter(text, "\n")
+	out := make([]ParsedToolCall, 0, 2)
+	for i := 0; i < len(lines); i++ {
+		marker, ok := parseShellFenceOpenLine(lines[i])
+		if !ok {
+			continue
+		}
+		var body strings.Builder
+		closed := false
+		for j := i + 1; j < len(lines); j++ {
+			if isFenceClose(strings.TrimLeft(strings.TrimRight(lines[j], "\r\n"), " \t"), marker) {
+				i = j
+				closed = true
+				break
+			}
+			body.WriteString(lines[j])
+		}
+		if !closed {
+			continue
+		}
+		command := strings.TrimSpace(body.String())
+		if command == "" {
+			continue
+		}
+		out = append(out, ParsedToolCall{
+			Name: name,
+			Input: map[string]any{
+				argName: command,
+			},
+		})
+	}
+	return out, len(out) > 0
+}
+
+func chooseShellFenceToolName(availableToolNames []string) string {
+	for _, want := range []string{"shell", "Bash", "shell_run", "execute_command", "exec_command", "PowerShell", "terminal"} {
+		if name := allowedToolName(want, availableToolNames); name != "" {
+			return name
+		}
+	}
+	return ""
+}
+
+func shellFenceCommandArgumentName(name string) string {
+	if toolNameKey(FromQwenToolName(name)) == "execcommand" {
+		return "cmd"
+	}
+	return "command"
+}
+
+func parseShellFenceOpenLine(line string) (string, bool) {
+	trimmed := strings.TrimLeft(strings.TrimRight(line, "\r\n"), " \t")
+	marker, ok := parseFenceOpen(trimmed)
+	if !ok {
+		return "", false
+	}
+	rest := strings.TrimSpace(trimmed[len(marker):])
+	if rest == "" {
+		return "", false
+	}
+	fields := strings.Fields(rest)
+	if len(fields) == 0 {
+		return "", false
+	}
+	if !isShellFenceLanguage(fields[0]) {
+		return "", false
+	}
+	return marker, true
+}
+
+func isShellFenceLanguage(lang string) bool {
+	lang = strings.ToLower(strings.Trim(strings.TrimSpace(lang), "{}"))
+	switch lang {
+	case "powershell", "pwsh", "ps1", "shell", "bash", "sh", "zsh", "cmd", "bat", "terminal":
+		return true
+	default:
+		return false
+	}
 }
 
 var minimaxToolCallBlockRe = regexp.MustCompile(`(?is)(?:^|[\r\n])\s*<?minimaxtool_call>?\s*(.*?)</minimaxtool_call\s*>`)

@@ -178,6 +178,15 @@ func splitSafeContentForToolDetection(state *State, s string) (safe, hold string
 		}
 		return "", s
 	}
+	if holdStart := findPartialShellCodeFenceStart(s); holdStart >= 0 {
+		if insideCodeFenceWithState(state, s[:holdStart]) {
+			return s, ""
+		}
+		if holdStart > 0 {
+			return s[:holdStart], s[holdStart:]
+		}
+		return "", s
+	}
 	return s, ""
 }
 
@@ -186,6 +195,9 @@ func findToolSegmentStart(state *State, s string) int {
 		return -1
 	}
 	if start := findMinimaxToolCallStart(state, s); start >= 0 {
+		return start
+	}
+	if start := findShellCodeFenceStart(state, s); start >= 0 {
 		return start
 	}
 	offset := 0
@@ -218,6 +230,87 @@ func findMinimaxToolCallStart(state *State, s string) int {
 		offset = idx + len(marker)
 	}
 	return -1
+}
+
+func findShellCodeFenceStart(state *State, s string) int {
+	for lineStart := 0; lineStart < len(s); {
+		lineEnd := strings.IndexAny(s[lineStart:], "\r\n")
+		if lineEnd < 0 {
+			lineEnd = len(s)
+		} else {
+			lineEnd += lineStart
+		}
+		if isShellCodeFenceOpenLine(s[lineStart:lineEnd]) && !insideCodeFenceWithState(state, s[:lineStart]) {
+			return lineStart
+		}
+		if lineEnd >= len(s) {
+			break
+		}
+		lineStart = lineEnd + 1
+		if lineEnd+1 < len(s) && s[lineEnd] == '\r' && s[lineEnd+1] == '\n' {
+			lineStart++
+		}
+	}
+	return -1
+}
+
+func findPartialShellCodeFenceStart(s string) int {
+	lineStart := strings.LastIndexAny(s, "\r\n") + 1
+	line := s[lineStart:]
+	trimmed := strings.TrimLeft(line, " \t")
+	leading := len(line) - len(trimmed)
+	start := lineStart + leading
+	if trimmed == "" || strings.TrimSpace(line[:leading]) != "" {
+		return -1
+	}
+	prefixes := []string{
+		"```powershell", "```pwsh", "```ps1", "```shell", "```bash", "```sh", "```zsh", "```cmd", "```bat", "```terminal",
+		"~~~powershell", "~~~pwsh", "~~~ps1", "~~~shell", "~~~bash", "~~~sh", "~~~zsh", "~~~cmd", "~~~bat", "~~~terminal",
+	}
+	lower := strings.ToLower(trimmed)
+	for _, prefix := range prefixes {
+		if len(lower) < len(prefix) && strings.HasPrefix(prefix, lower) {
+			return start
+		}
+	}
+	return -1
+}
+
+func isShellCodeFenceOpenLine(line string) bool {
+	trimmed := strings.TrimLeft(line, " \t")
+	if len(trimmed) < 4 {
+		return false
+	}
+	ch := trimmed[0]
+	if ch != '`' && ch != '~' {
+		return false
+	}
+	count := 0
+	for count < len(trimmed) && trimmed[count] == ch {
+		count++
+	}
+	if count < 3 {
+		return false
+	}
+	rest := strings.TrimSpace(trimmed[count:])
+	if rest == "" {
+		return false
+	}
+	fields := strings.Fields(rest)
+	if len(fields) == 0 {
+		return false
+	}
+	return isShellFenceLanguage(fields[0])
+}
+
+func isShellFenceLanguage(lang string) bool {
+	lang = strings.ToLower(strings.Trim(strings.TrimSpace(lang), "{}"))
+	switch lang {
+	case "powershell", "pwsh", "ps1", "shell", "bash", "sh", "zsh", "cmd", "bat", "terminal":
+		return true
+	default:
+		return false
+	}
 }
 
 func findPartialMinimaxToolCallStart(s string) int {
@@ -264,6 +357,9 @@ func consumeToolCapture(state *State, toolNames []string) (prefix string, calls 
 	if parsed := toolcall.ParseStandaloneToolCallsDetailed(captured, toolNames); len(parsed.Calls) > 0 {
 		return "", parsed.Calls, "", true
 	}
+	if hasOpenShellCodeFence(captured) {
+		return "", nil, "", false
+	}
 	// If XML tags are present but block is incomplete, keep buffering.
 	if hasOpenXMLToolTag(captured) {
 		return "", nil, "", false
@@ -275,4 +371,46 @@ func consumeToolCapture(state *State, toolNames []string) (prefix string, calls 
 		return "", nil, "", false
 	}
 	return captured, nil, "", true
+}
+
+func hasOpenShellCodeFence(text string) bool {
+	lines := strings.SplitAfter(text, "\n")
+	openMarker := ""
+	for _, line := range lines {
+		trimmed := strings.TrimLeft(strings.TrimRight(line, "\r\n"), " \t")
+		if openMarker == "" {
+			if !isShellCodeFenceOpenLine(trimmed) {
+				continue
+			}
+			openMarker = leadingFenceMarker(trimmed)
+			continue
+		}
+		if isMatchingFenceClose(trimmed, openMarker) {
+			openMarker = ""
+		}
+	}
+	return openMarker != ""
+}
+
+func leadingFenceMarker(line string) string {
+	if line == "" {
+		return ""
+	}
+	ch := line[0]
+	count := 0
+	for count < len(line) && line[count] == ch {
+		count++
+	}
+	return strings.Repeat(string(ch), count)
+}
+
+func isMatchingFenceClose(line, marker string) bool {
+	if marker == "" || line == "" || line[0] != marker[0] {
+		return false
+	}
+	count := 0
+	for count < len(line) && line[count] == marker[0] {
+		count++
+	}
+	return count >= len(marker) && strings.TrimSpace(line[count:]) == ""
 }
