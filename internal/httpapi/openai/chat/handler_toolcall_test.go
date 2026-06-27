@@ -420,6 +420,44 @@ func TestHandleStreamSuppressesMalformedMinimaxToolMarkers(t *testing.T) {
 	}
 }
 
+func TestHandleStreamConvertsMinimaxParameterBlockToToolCall(t *testing.T) {
+	h := &Handler{}
+	line := func(v string) string {
+		b, _ := json.Marshal(map[string]any{"p": "response/content", "v": v})
+		return "data: " + string(b)
+	}
+	resp := makeSSEHTTPResponse(
+		line("好的，让我先看看项目结构。\n"),
+		line("minimaxtool_call\n"),
+		line(`**$null | % { Get-ChildItem -Path $pwd -Force }**`+"\n\n"),
+		line(`<parameter name="command">Get-ChildItem -Path . -Force -ErrorAction SilentlyContinue | Select-Object Name, Mode</parameter>`+"\n"),
+		line(`<parameter name="cwd">G:\工作资料\scnet</parameter>`+"\n\n"),
+		line(`</minimaxtool_call>`),
+		`data: [DONE]`,
+	)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+
+	h.handleStream(rec, req, resp, "cid-minimax-tool", "deepseek-v3.2", "prompt", 0, false, false, []string{"shell"}, nil, nil)
+
+	body := rec.Body.String()
+	for _, leaked := range []string{"minimaxtool_call", "<parameter", "</minimaxtool_call>"} {
+		if strings.Contains(body, leaked) {
+			t.Fatalf("Minimax tool block leaked %q in body=%s", leaked, body)
+		}
+	}
+	frames, done := parseSSEDataFrames(t, body)
+	if !done {
+		t.Fatalf("expected [DONE], body=%s", body)
+	}
+	if !streamHasToolCallsDelta(frames) {
+		t.Fatalf("expected Minimax block to become tool_calls, body=%s", body)
+	}
+	if streamFinishReason(frames) != "tool_calls" {
+		t.Fatalf("expected finish_reason=tool_calls, body=%s", body)
+	}
+}
+
 func TestHandleStreamPromotesThinkingToolCallsOnFinalizeWithoutMidstreamIntercept(t *testing.T) {
 	h := &Handler{}
 	resp := makeSSEHTTPResponse(

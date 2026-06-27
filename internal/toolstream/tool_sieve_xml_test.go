@@ -116,6 +116,47 @@ func TestProcessToolSieveSuppressesMinimaxBareInvokeRun(t *testing.T) {
 	}
 }
 
+func TestProcessToolSieveParsesMinimaxParameterBlock(t *testing.T) {
+	var state State
+	chunks := []string{
+		"好的，让我先看看项目结构。\n",
+		"minimax",
+		"tool_call\n",
+		`**$null | % { Get-ChildItem -Path $pwd -Force }**` + "\n\n",
+		`<parameter name="command">Get-ChildItem -Path . -Force -ErrorAction SilentlyContinue | Select-Object Name, Mode</parameter>` + "\n",
+		`<parameter name="cwd">G:\工作资料\scnet</parameter>` + "\n\n",
+		"</minimaxtool_call>",
+	}
+	var events []Event
+	for _, c := range chunks {
+		events = append(events, ProcessChunk(&state, c, []string{"shell"})...)
+	}
+	events = append(events, Flush(&state, []string{"shell"})...)
+
+	var textContent strings.Builder
+	var calls []string
+	var gotCommand string
+	for _, evt := range events {
+		textContent.WriteString(evt.Content)
+		for _, call := range evt.ToolCalls {
+			calls = append(calls, call.Name)
+			gotCommand, _ = call.Input["command"].(string)
+		}
+	}
+	if len(calls) != 1 || calls[0] != "shell" {
+		t.Fatalf("expected one shell tool call, got calls=%v events=%#v", calls, events)
+	}
+	if strings.Contains(textContent.String(), "minimaxtool_call") || strings.Contains(textContent.String(), "<parameter") {
+		t.Fatalf("Minimax tool block leaked to text %q events=%#v", textContent.String(), events)
+	}
+	if !strings.Contains(textContent.String(), "好的") {
+		t.Fatalf("expected leading text to remain, got %q events=%#v", textContent.String(), events)
+	}
+	if gotCommand == "" || !strings.Contains(gotCommand, "Get-ChildItem") {
+		t.Fatalf("expected command argument to parse, got %q", gotCommand)
+	}
+}
+
 func TestProcessToolSieveInterceptsDSMLToolCallWithoutLeak(t *testing.T) {
 	var state State
 	chunks := []string{

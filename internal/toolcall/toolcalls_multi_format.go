@@ -13,27 +13,86 @@ func parseMultiFormatToolCalls(text string, availableToolNames []string) ([]Pars
 		return nil, false
 	}
 
-	// 1. 尝试 Named XML 格式 (例如: <tool_call name="xxx">...</tool_call>)
+	// 1. 尝试 Minimax 原生文本块，例如: minimaxtool_call ... <parameter name="command">...</parameter>
+	if calls, ok := parseMinimaxToolCalls(trimmed, availableToolNames); ok && len(calls) > 0 {
+		return calls, true
+	}
+
+	// 2. 尝试 Named XML 格式 (例如: <tool_call name="xxx">...</tool_call>)
 	if calls, ok := parseNamedXMLToolCalls(trimmed, availableToolNames); ok && len(calls) > 0 {
 		return calls, true
 	}
 
-	// 2. 尝试从 <tool_calls> 或 <tool_call> 标签中提取 JSON 块解析
+	// 3. 尝试从 <tool_calls> 或 <tool_call> 标签中提取 JSON 块解析
 	if calls, ok := parseJSONBlocksFromTags(trimmed, availableToolNames); ok && len(calls) > 0 {
 		return calls, true
 	}
 
-	// 3. 尝试解析 Markdown 代码围栏内的 JSON 块（或者整体是个 JSON）
+	// 4. 尝试解析 Markdown 代码围栏内的 JSON 块（或者整体是个 JSON）
 	if calls, ok := parseJSONBlockMarkdown(trimmed, availableToolNames); ok && len(calls) > 0 {
 		return calls, true
 	}
 
-	// 4. 尝试解析 TextKV 键值对格式
+	// 5. 尝试解析 TextKV 键值对格式
 	if calls, ok := parseTextKVToolCalls(trimmed, availableToolNames); ok && len(calls) > 0 {
 		return calls, true
 	}
 
 	return nil, false
+}
+
+var minimaxToolCallBlockRe = regexp.MustCompile(`(?is)(?:^|[\r\n])\s*<?minimaxtool_call>?\s*(.*?)</minimaxtool_call\s*>`)
+
+func parseMinimaxToolCalls(text string, availableToolNames []string) ([]ParsedToolCall, bool) {
+	if !strings.Contains(strings.ToLower(text), "minimaxtool_call") {
+		return nil, false
+	}
+	matches := minimaxToolCallBlockRe.FindAllStringSubmatch(text, -1)
+	if len(matches) == 0 {
+		return nil, false
+	}
+	name := chooseMinimaxToolName(availableToolNames)
+	if name == "" {
+		return nil, false
+	}
+	out := make([]ParsedToolCall, 0, len(matches))
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+		input := parseMinimaxParameters(match[1])
+		if len(input) == 0 {
+			continue
+		}
+		out = append(out, ParsedToolCall{Name: name, Input: input})
+	}
+	return out, len(out) > 0
+}
+
+func chooseMinimaxToolName(availableToolNames []string) string {
+	preferred := []string{"shell", "Bash", "shell_run", "execute_command", "exec_command", "PowerShell"}
+	for _, want := range preferred {
+		if name := allowedToolName(want, availableToolNames); name != "" {
+			return name
+		}
+	}
+	if len(availableToolNames) == 1 {
+		return allowedToolName(availableToolNames[0], availableToolNames)
+	}
+	return ""
+}
+
+func parseMinimaxParameters(body string) map[string]any {
+	input := map[string]any{}
+	for _, paramMatch := range findXMLElementBlocks(body, "parameter") {
+		paramAttrs := parseXMLTagAttributes(paramMatch.Attrs)
+		paramName := strings.TrimSpace(paramAttrs["name"])
+		if paramName == "" {
+			continue
+		}
+		input[paramName] = parseInvokeParameterValue(paramName, paramMatch.Body)
+	}
+	return input
 }
 
 // allowedToolName 根据允许调用的工具名列表校验工具名

@@ -261,6 +261,9 @@ func consumeToolCapture(state *State, toolNames []string) (prefix string, calls 
 	if xmlPrefix, xmlCalls, xmlSuffix, xmlReady := consumeXMLToolCapture(captured, toolNames); xmlReady {
 		return xmlPrefix, xmlCalls, xmlSuffix, true
 	}
+	if parsed := toolcall.ParseStandaloneToolCallsDetailed(captured, toolNames); len(parsed.Calls) > 0 {
+		return "", parsed.Calls, "", true
+	}
 	// If XML tags are present but block is incomplete, keep buffering.
 	if hasOpenXMLToolTag(captured) {
 		return "", nil, "", false

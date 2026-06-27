@@ -116,7 +116,7 @@ func TestStreamAccumulatorStripsInlineCitationAndReferenceMarkers(t *testing.T) 
 }
 
 func TestCleanVisibleOutputStripsMalformedToolMarkers(t *testing.T) {
-	input := "中午好！让我先看看项目结构。\nminimaxtool_call\n<invoke name=\"shell\">\n<invoke name=\"Read\">\n<tool_call>{\"name\":\"shell\"}</tool_call>\n后续文本"
+	input := "中午好！让我先看看项目结构。\nminimaxtool_call\n<parameter name=\"command\">pwd</parameter>\n</minimaxtool_call>\n<invoke name=\"shell\">\n<invoke name=\"Read\">\n<tool_call>{\"name\":\"shell\"}</tool_call>\n后续文本"
 	got := CleanVisibleOutput(input, false)
 	for _, leaked := range []string{"minimaxtool_call", "<invoke", "<tool_call", "shell", "Read"} {
 		if strings.Contains(got, leaked) {

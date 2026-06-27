@@ -952,6 +952,27 @@ func TestParseToolCallsSupportsSingularJSONToolCall(t *testing.T) {
 	}
 }
 
+func TestParseToolCallsSupportsMinimaxToolCallBlock(t *testing.T) {
+	text := "minimaxtool_call\n" +
+		`**$null | % { Get-ChildItem -Path $pwd -Force }**` + "\n\n" +
+		`<parameter name="command">Get-ChildItem -Path . -Force -ErrorAction SilentlyContinue | Select-Object Name, Mode</parameter>` + "\n" +
+		`<parameter name="cwd">G:\工作资料\scnet</parameter>` + "\n\n" +
+		`</minimaxtool_call>`
+	calls := ParseToolCalls(text, []string{"shell"})
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 call, got %#v", calls)
+	}
+	if calls[0].Name != "shell" {
+		t.Fatalf("expected shell, got %q", calls[0].Name)
+	}
+	if calls[0].Input["command"] != "Get-ChildItem -Path . -Force -ErrorAction SilentlyContinue | Select-Object Name, Mode" {
+		t.Fatalf("expected command argument, got %#v", calls[0].Input)
+	}
+	if calls[0].Input["cwd"] != `G:\工作资料\scnet` {
+		t.Fatalf("expected cwd argument, got %#v", calls[0].Input)
+	}
+}
+
 func TestParseToolCallsSupportsJSONBlockInTags(t *testing.T) {
 	text := `<tool_calls>[{"name": "Bash", "arguments": {"command": "git pull"}}]</tool_calls>`
 	calls := ParseToolCalls(text, []string{"Bash"})
