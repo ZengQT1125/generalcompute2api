@@ -1,13 +1,13 @@
 package toolcall
 
-// Pipe-style tool markup (emitted in prompts and parsed from model output).
-// Legacy <|DSML|tool_calls> / <tool_calls> remain accepted by the scanner.
+// Pipe-style QNML tool markup. Legacy ZJML/DSML and <tool_calls> remain
+// accepted by the scanner, but Codex-facing prompts prefer qwen2API's shape.
 const (
-	MarkupPipeChannel = "ZJML"
+	MarkupPipeChannel = "QNML"
 
-	MarkupTagToolCalls = "工具调用"
-	MarkupTagInvoke    = "调用项"
-	MarkupTagParameter = "形参"
+	MarkupTagToolCalls = "tool_calls"
+	MarkupTagInvoke    = "invoke"
+	MarkupTagParameter = "parameter"
 )
 
 func MarkupPipeOpenTag(localName string) string {
@@ -18,7 +18,7 @@ func MarkupPipeCloseTag(localName string) string {
 	return "</|" + MarkupPipeChannel + "|" + localName + ">"
 }
 
-// MarkupPipeInvokeOpen renders <|ZJML|调用项 name="toolName">.
+// MarkupPipeInvokeOpen renders <|QNML|invoke name="toolName">.
 func MarkupPipeInvokeOpen(toolName string) string {
 	return "<|" + MarkupPipeChannel + "|" + MarkupTagInvoke + ` name="` + toolName + `">`
 }

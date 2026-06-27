@@ -38,25 +38,11 @@ func parseMultiFormatToolCalls(text string, availableToolNames []string) ([]Pars
 
 // allowedToolName 根据允许调用的工具名列表校验工具名
 func allowedToolName(name string, availableToolNames []string) string {
-	name = strings.TrimSpace(name)
+	name = canonicalToolName(name, availableToolNames)
 	if name == "" {
 		return ""
 	}
-	if len(availableToolNames) == 0 {
-		return name
-	}
-	for _, t := range availableToolNames {
-		if strings.TrimSpace(t) == name {
-			return t
-		}
-	}
-	// 兼容 fallback，如果是 `__any_tool__` 则放行任何解析出来的工具名
-	for _, t := range availableToolNames {
-		if t == "__any_tool__" {
-			return name
-		}
-	}
-	return ""
+	return name
 }
 
 var cdataRe = regexp.MustCompile(`(?i)^<!\[CDATA\[([\s\S]*?)\]\]>$`)

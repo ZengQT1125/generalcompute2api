@@ -85,7 +85,7 @@ func TestResponsesUploadsPrivateContextAndReplacesLiveTail(t *testing.T) {
 	prompt, _ := ds.payload["prompt"].(string)
 	for _, moved := range []string{
 		"find response language support",
-		"<|ZJML|工具调用>",
+		"<|QNML|tool_calls>",
 		"response language support",
 		"found: responses supports en, zh",
 	} {

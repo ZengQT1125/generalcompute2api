@@ -47,10 +47,10 @@ func TestBuildOpenAIFinalPrompt_HandlerPathIncludesToolRoundtripSemantics(t *tes
 	if !strings.Contains(finalPrompt, `"condition":"sunny"`) {
 		t.Fatalf("handler finalPrompt should preserve tool output content: %q", finalPrompt)
 	}
-	if !strings.Contains(finalPrompt, "<|ZJML|工具调用>") {
+	if !strings.Contains(finalPrompt, "<|QNML|tool_calls>") {
 		t.Fatalf("handler finalPrompt should preserve assistant tool history: %q", finalPrompt)
 	}
-	if !strings.Contains(finalPrompt, `<|ZJML|调用项 name="get_weather">`) {
+	if !strings.Contains(finalPrompt, `<|QNML|invoke name="u_get_weather">`) {
 		t.Fatalf("handler finalPrompt should include tool name history: %q", finalPrompt)
 	}
 }
@@ -74,7 +74,7 @@ func TestBuildOpenAIFinalPrompt_KeepsFinalAnswerInstruction(t *testing.T) {
 	}
 
 	finalPrompt, _ := buildOpenAIFinalPrompt(messages, tools, "", false)
-	if !strings.Contains(finalPrompt, "请记住：唯一合法的工具调用方式是在回复末尾使用 <|ZJML|工具调用>...</|ZJML|工具调用> 代码块。") {
+	if !strings.Contains(finalPrompt, "请记住：唯一合法的工具调用方式是在回复末尾使用 <|QNML|tool_calls>...</|QNML|tool_calls> 代码块。") {
 		t.Fatalf("finalPrompt missing final tool-call anchor instruction: %q", finalPrompt)
 	}
 	if !strings.Contains(finalPrompt, "工具调用格式") {

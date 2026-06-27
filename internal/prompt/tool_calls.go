@@ -103,7 +103,7 @@ func formatToolCallForPrompt(call map[string]any) string {
 	}
 
 	parameters := formatToolCallParametersForPrompt(argsRaw)
-	escapedName := escapeXMLAttribute(name)
+	escapedName := escapeXMLAttribute(toolcall.ToQwenToolName(name))
 	if parameters == "" {
 		return "  " + toolcall.MarkupPipeInvokeOpen(escapedName) + toolcall.MarkupPipeCloseTag(toolcall.MarkupTagInvoke)
 	}

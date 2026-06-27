@@ -36,7 +36,7 @@ func BuildToolCallInstructions(toolNames []string) string {
 9）不要用 Markdown 代码围栏包裹 XML；不要输出解释性说明、角色标记或内心独白。
 10）若调用工具，该工具块的首个非空白字符必须恰好是 ` + tcO + `。
 11）即使随后会闭合 ` + tcC + `，也禁止省略开头的 ` + tcO + ` 标签。
-12）兼容说明：运行时仍接受旧版标签 <tool_calls> / <invoke> / <parameter> 以及历史格式 <|DSML|…>，请优先使用本节的 <|ZJML|…> 形式。
+12）兼容说明：运行时仍接受旧版标签 <tool_calls> / <invoke> / <parameter> 以及历史格式 <|ZJML|…> / <|DSML|…>，请优先使用本节的 <|QNML|…> 形式。
 
 参数形态：
 - 字符串 => ` + wrapParameter("x", "<![CDATA[value]]>") + `
@@ -96,7 +96,7 @@ func uniqueToolNames(toolNames []string) []string {
 	names := make([]string, 0, len(toolNames))
 	seen := map[string]bool{}
 	for _, name := range toolNames {
-		name = strings.TrimSpace(name)
+		name = ToQwenToolName(name)
 		if name == "" || seen[name] {
 			continue
 		}
@@ -178,7 +178,7 @@ func wrapParameter(name, inner string) string {
 }
 
 func exampleBasicParams(name string) (string, bool) {
-	switch strings.TrimSpace(name) {
+	switch FromQwenToolName(name) {
 	case "Read":
 		return wrapParameter("file_path", promptCDATA("README.md")), true
 	case "Glob":
@@ -206,7 +206,7 @@ func exampleBasicParams(name string) (string, bool) {
 }
 
 func exampleNestedParams(name string) (string, bool) {
-	switch strings.TrimSpace(name) {
+	switch FromQwenToolName(name) {
 	case "MultiEdit":
 		return wrapParameter("file_path", promptCDATA("README.md")) + "\n" + wrapParameter("edits", `<item><old_string>`+promptCDATA("foo")+`</old_string><new_string>`+promptCDATA("bar")+`</new_string></item>`), true
 	case "Task":
@@ -228,7 +228,7 @@ bash /tmp/test_escape.sh`
 echo 'single "double"'
 echo "literal dollar: $HOME"`
 
-	switch strings.TrimSpace(name) {
+	switch FromQwenToolName(name) {
 	case "Bash":
 		return wrapParameter("command", promptCDATA(scriptCommand)) + "\n" + wrapParameter("description", promptCDATA("测试 Shell 转义")), true
 	case "execute_command":

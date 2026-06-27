@@ -7,63 +7,63 @@ import (
 
 func TestBuildToolCallInstructions_ExecCommandUsesCmdExample(t *testing.T) {
 	out := BuildToolCallInstructions([]string{"exec_command"})
-	if !strings.Contains(out, `<|ZJML|调用项 name="exec_command">`) {
+	if !strings.Contains(out, `<|QNML|invoke name="u_exec_command">`) {
 		t.Fatalf("expected exec_command in examples, got: %s", out)
 	}
-	if !strings.Contains(out, `<|ZJML|形参 name="cmd"><![CDATA[pwd]]></|ZJML|形参>`) {
+	if !strings.Contains(out, `<|QNML|parameter name="cmd"><![CDATA[pwd]]></|QNML|parameter>`) {
 		t.Fatalf("expected cmd parameter example for exec_command, got: %s", out)
 	}
 }
 
 func TestBuildToolCallInstructions_ExecuteCommandUsesCommandExample(t *testing.T) {
 	out := BuildToolCallInstructions([]string{"execute_command"})
-	if !strings.Contains(out, `<|ZJML|调用项 name="execute_command">`) {
+	if !strings.Contains(out, `<|QNML|invoke name="u_execute_command">`) {
 		t.Fatalf("expected execute_command in examples, got: %s", out)
 	}
-	if !strings.Contains(out, `<|ZJML|形参 name="command"><![CDATA[pwd]]></|ZJML|形参>`) {
+	if !strings.Contains(out, `<|QNML|parameter name="command"><![CDATA[pwd]]></|QNML|parameter>`) {
 		t.Fatalf("expected command parameter example for execute_command, got: %s", out)
 	}
 }
 
 func TestBuildToolCallInstructions_BashUsesCommandAndDescriptionExamples(t *testing.T) {
 	out := BuildToolCallInstructions([]string{"Bash"})
-	blocks := findInvokeBlocks(out, "Bash")
+	blocks := findInvokeBlocks(out, "shell_run")
 	if len(blocks) == 0 {
 		t.Fatalf("expected Bash examples, got: %s", out)
 	}
 
 	sawDescription := false
 	for _, block := range blocks {
-		if !strings.Contains(block, `<|ZJML|形参 name="command">`) {
+		if !strings.Contains(block, `<|QNML|parameter name="command">`) {
 			t.Fatalf("expected every Bash example to use command parameter, got: %s", block)
 		}
-		if strings.Contains(block, `<|ZJML|形参 name="path">`) || strings.Contains(block, `<|ZJML|形参 name="content">`) {
+		if strings.Contains(block, `<|QNML|parameter name="path">`) || strings.Contains(block, `<|QNML|parameter name="content">`) {
 			t.Fatalf("expected Bash examples not to use file write parameters, got: %s", block)
 		}
-		if strings.Contains(block, `<|ZJML|形参 name="description">`) {
+		if strings.Contains(block, `<|QNML|parameter name="description">`) {
 			sawDescription = true
 		}
 	}
 	if !sawDescription {
 		t.Fatalf("expected Bash long-script example to include description, got: %s", out)
 	}
-	if strings.Contains(out, `<|ZJML|调用项 name="Read">`) {
+	if strings.Contains(out, `<|QNML|invoke name="Read">`) {
 		t.Fatalf("expected examples to avoid unavailable hard-coded Read tool, got: %s", out)
 	}
 }
 
 func TestBuildToolCallInstructions_ExecuteCommandLongScriptUsesCommand(t *testing.T) {
 	out := BuildToolCallInstructions([]string{"execute_command"})
-	blocks := findInvokeBlocks(out, "execute_command")
+	blocks := findInvokeBlocks(out, "u_execute_command")
 	if len(blocks) == 0 {
 		t.Fatalf("expected execute_command examples, got: %s", out)
 	}
 
 	for _, block := range blocks {
-		if !strings.Contains(block, `<|ZJML|形参 name="command">`) {
+		if !strings.Contains(block, `<|QNML|parameter name="command">`) {
 			t.Fatalf("expected execute_command examples to use command parameter, got: %s", block)
 		}
-		if strings.Contains(block, `<|ZJML|形参 name="path">`) || strings.Contains(block, `<|ZJML|形参 name="content">`) {
+		if strings.Contains(block, `<|QNML|parameter name="path">`) || strings.Contains(block, `<|QNML|parameter name="content">`) {
 			t.Fatalf("expected execute_command examples not to use file write parameters, got: %s", block)
 		}
 	}
@@ -74,16 +74,16 @@ func TestBuildToolCallInstructions_ExecuteCommandLongScriptUsesCommand(t *testin
 
 func TestBuildToolCallInstructions_ExecCommandLongScriptUsesCmd(t *testing.T) {
 	out := BuildToolCallInstructions([]string{"exec_command"})
-	blocks := findInvokeBlocks(out, "exec_command")
+	blocks := findInvokeBlocks(out, "u_exec_command")
 	if len(blocks) == 0 {
 		t.Fatalf("expected exec_command examples, got: %s", out)
 	}
 
 	for _, block := range blocks {
-		if !strings.Contains(block, `<|ZJML|形参 name="cmd">`) {
+		if !strings.Contains(block, `<|QNML|parameter name="cmd">`) {
 			t.Fatalf("expected exec_command examples to use cmd parameter, got: %s", block)
 		}
-		if strings.Contains(block, `<|ZJML|形参 name="command">`) || strings.Contains(block, `<|ZJML|形参 name="path">`) || strings.Contains(block, `<|ZJML|形参 name="content">`) {
+		if strings.Contains(block, `<|QNML|parameter name="command">`) || strings.Contains(block, `<|QNML|parameter name="path">`) || strings.Contains(block, `<|QNML|parameter name="content">`) {
 			t.Fatalf("expected exec_command examples not to use command or file write parameters, got: %s", block)
 		}
 	}
@@ -94,16 +94,16 @@ func TestBuildToolCallInstructions_ExecCommandLongScriptUsesCmd(t *testing.T) {
 
 func TestBuildToolCallInstructions_WriteUsesFilePathAndContent(t *testing.T) {
 	out := BuildToolCallInstructions([]string{"Write"})
-	blocks := findInvokeBlocks(out, "Write")
+	blocks := findInvokeBlocks(out, "fs_put_file")
 	if len(blocks) == 0 {
 		t.Fatalf("expected Write examples, got: %s", out)
 	}
 
 	for _, block := range blocks {
-		if !strings.Contains(block, `<|ZJML|形参 name="file_path">`) || !strings.Contains(block, `<|ZJML|形参 name="content">`) {
+		if !strings.Contains(block, `<|QNML|parameter name="file_path">`) || !strings.Contains(block, `<|QNML|parameter name="content">`) {
 			t.Fatalf("expected Write examples to use file_path and content, got: %s", block)
 		}
-		if strings.Contains(block, `<|ZJML|形参 name="path">`) {
+		if strings.Contains(block, `<|QNML|parameter name="path">`) {
 			t.Fatalf("expected Write examples not to use path, got: %s", block)
 		}
 	}
@@ -111,7 +111,7 @@ func TestBuildToolCallInstructions_WriteUsesFilePathAndContent(t *testing.T) {
 
 func TestBuildToolCallInstructions_AnchorsMissingOpeningWrapperFailureMode(t *testing.T) {
 	out := BuildToolCallInstructions([]string{"read_file"})
-	if !strings.Contains(out, "禁止省略开头的 <|ZJML|工具调用> 标签") {
+	if !strings.Contains(out, "禁止省略开头的 <|QNML|tool_calls> 标签") {
 		t.Fatalf("expected explicit missing-opening-tag warning, got: %s", out)
 	}
 	if !strings.Contains(out, "错误 3 — 缺少开头包裹") {
@@ -120,7 +120,7 @@ func TestBuildToolCallInstructions_AnchorsMissingOpeningWrapperFailureMode(t *te
 }
 
 func findInvokeBlocks(text, name string) []string {
-	open := `<|ZJML|调用项 name="` + name + `">`
+	open := `<|QNML|invoke name="` + name + `">`
 	remaining := text
 	blocks := []string{}
 	for {
@@ -129,11 +129,11 @@ func findInvokeBlocks(text, name string) []string {
 			return blocks
 		}
 		remaining = remaining[start:]
-		end := strings.Index(remaining, `</|ZJML|调用项>`)
+		end := strings.Index(remaining, `</|QNML|invoke>`)
 		if end < 0 {
 			return blocks
 		}
-		end += len(`</|ZJML|调用项>`)
+		end += len(`</|QNML|invoke>`)
 		blocks = append(blocks, remaining[:end])
 		remaining = remaining[end:]
 	}

@@ -16,6 +16,23 @@ func TestFormatOpenAIToolCalls(t *testing.T) {
 	}
 }
 
+func TestParseToolCalls_QNMLSafeToolNameAliases(t *testing.T) {
+	calls := ParseToolCalls(`<|QNML|tool_calls>
+  <|QNML|invoke name="shell_run">
+    <|QNML|parameter name="command"><![CDATA[pwd]]></|QNML|parameter>
+  </|QNML|invoke>
+</|QNML|tool_calls>`, []string{"Bash"})
+	if len(calls) != 1 {
+		t.Fatalf("expected one call, got %#v", calls)
+	}
+	if calls[0].Name != "Bash" {
+		t.Fatalf("expected alias to resolve to Bash, got %q", calls[0].Name)
+	}
+	if calls[0].Input["command"] != "pwd" {
+		t.Fatalf("expected command argument, got %#v", calls[0].Input)
+	}
+}
+
 func TestParseToolCallsSupportsToolCallsWrapper(t *testing.T) {
 	text := `<tool_calls><invoke name="Bash"><parameter name="command">pwd</parameter><parameter name="description">show cwd</parameter></invoke></tool_calls>`
 	calls := ParseToolCalls(text, []string{"bash"})
@@ -959,4 +976,3 @@ func TestParseToolCallsSupportsTextKVFormat(t *testing.T) {
 		t.Fatalf("expected val1, got %#v", calls[0].Input)
 	}
 }
-

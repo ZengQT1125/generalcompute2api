@@ -440,7 +440,7 @@ func TestChatCompletionsMovesPostUserToolHistoryToPrivateContext(t *testing.T) {
 	uploadedText := string(ds.uploadCalls[0].Data)
 	for _, want := range []string{
 		"find email parser language support",
-		"<|ZJML|工具调用>",
+		"<|QNML|tool_calls>",
 		"search_code",
 		"email parser language support",
 		"found: parser supports en, zh",
@@ -452,7 +452,7 @@ func TestChatCompletionsMovesPostUserToolHistoryToPrivateContext(t *testing.T) {
 	prompt, _ := ds.completionReq["prompt"].(string)
 	for _, moved := range []string{
 		"find email parser language support",
-		"<|ZJML|工具调用>",
+		"<|QNML|tool_calls>",
 		"email parser language support",
 		"found: parser supports en, zh",
 	} {

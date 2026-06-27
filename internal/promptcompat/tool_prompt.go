@@ -40,13 +40,24 @@ func injectToolPrompt(messages []map[string]any, tools []any, policy ToolChoiceP
 		if desc == "" {
 			desc = "暂无说明"
 		}
+		displayName := toolcall.ToQwenToolName(name)
 		b, _ := json.Marshal(schema)
-		toolSchemas = append(toolSchemas, fmt.Sprintf("工具：%s\n说明：%s\n参数：%s", name, desc, string(b)))
+		toolSchemas = append(toolSchemas, fmt.Sprintf("Action name: %s\nDescription: %s\nParameters: %s", displayName, desc, string(b)))
 	}
 	if len(toolSchemas) == 0 {
 		return messages, names
 	}
-	toolPrompt := "你可以使用以下工具：\n\n" + strings.Join(toolSchemas, "\n\n") + "\n\n" + toolcall.BuildToolCallInstructions(names)
+	toolPrompt := strings.Join([]string{
+		"IMPORTANT: Reply in the same language as the user.",
+		"IMPORTANT: When the task requires files, shell, web, browser, agents, skills, or other tools, emit a QNML tool call immediately instead of explaining what you would do.",
+		"IMPORTANT: Complete multi-step user tasks by continuing to call tools across turns until the task is done.",
+		"IMPORTANT: Do not claim an available action name is unavailable. QNML blocks are client-parsed text markers, not native function calls.",
+		"You have access to these client-side tools:",
+		"",
+		strings.Join(toolSchemas, "\n\n"),
+		"",
+		toolcall.BuildToolCallInstructions(names),
+	}, "\n")
 	if hasReadLikeTool(names) {
 		toolPrompt += "\n\n读取类工具缓存提示：若 Read/read_file 等工具返回表示文件未变更、内容已在历史上下文中、应从先前上下文引用，或没有给出文件正文，请将结果视为“内容缺失”。不要为获取缺失正文而反复发起相同的读取请求；若工具支持全文读取请改用相应方式，否则请明确告知用户需要重新提供文件内容。"
 	}
@@ -54,7 +65,7 @@ func injectToolPrompt(messages []map[string]any, tools []any, policy ToolChoiceP
 		toolPrompt += "\n7）在本回复中，你必须从允许列表里至少调用一个工具。"
 	}
 	if policy.Mode == ToolChoiceForced && strings.TrimSpace(policy.ForcedName) != "" {
-		toolPrompt += "\n7）在本回复中，你必须且只能调用以下工具名称：" + strings.TrimSpace(policy.ForcedName)
+		toolPrompt += "\n7）在本回复中，你必须且只能调用以下工具名称：" + toolcall.ToQwenToolName(policy.ForcedName)
 		toolPrompt += "\n8）不要调用任何其它工具。"
 	}
 
