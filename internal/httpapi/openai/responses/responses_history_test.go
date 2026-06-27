@@ -2,6 +2,7 @@ package responses
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -18,8 +19,9 @@ import (
 )
 
 type responsesHistoryDS struct {
-	payload map[string]any
-	uploads []dsclient.UploadFileRequest
+	payload   map[string]any
+	uploads   []dsclient.UploadFileRequest
+	uploadErr error
 }
 
 func (d *responsesHistoryDS) CreateSession(context.Context, *auth.RequestAuth, int) (string, error) {
@@ -32,6 +34,9 @@ func (d *responsesHistoryDS) GetPow(context.Context, *auth.RequestAuth, int) (st
 
 func (d *responsesHistoryDS) UploadFile(_ context.Context, _ *auth.RequestAuth, req dsclient.UploadFileRequest, _ int) (*dsclient.UploadFileResult, error) {
 	d.uploads = append(d.uploads, req)
+	if d.uploadErr != nil {
+		return nil, d.uploadErr
+	}
 	return &dsclient.UploadFileResult{ID: "file-responses-context"}, nil
 }
 
@@ -47,6 +52,8 @@ func (d *responsesHistoryDS) CallCompletion(_ context.Context, _ *auth.RequestAu
 func TestResponsesUploadsPrivateContextAndReplacesLiveTail(t *testing.T) {
 	store, resolver := newManagedKeyResolver(t)
 	if err := store.Update(func(c *config.Config) error {
+		enabled := true
+		c.CurrentInputFile.Enabled = &enabled
 		c.CurrentInputFile.MinChars = 1
 		return nil
 	}); err != nil {
@@ -110,6 +117,54 @@ func TestResponsesUploadsPrivateContextAndReplacesLiveTail(t *testing.T) {
 	}
 	if full.HistoryText != string(ds.uploads[0].Data) {
 		t.Fatalf("expected response history to persist uploaded private context")
+	}
+}
+
+func TestResponsesFallsBackToInlinePromptWhenPrivateContextUploadFails(t *testing.T) {
+	store, resolver := newManagedKeyResolver(t)
+	if err := store.Update(func(c *config.Config) error {
+		enabled := true
+		c.CurrentInputFile.Enabled = &enabled
+		c.CurrentInputFile.MinChars = 1
+		return nil
+	}); err != nil {
+		t.Fatalf("set current input min chars: %v", err)
+	}
+	ds := &responsesHistoryDS{uploadErr: errors.New("upload unsupported")}
+	h := &Handler{
+		Store: store,
+		Auth:  resolver,
+		DS:    ds,
+	}
+	r := chi.NewRouter()
+	RegisterRoutes(r, h)
+
+	reqBody := `{"model":"gpt-oss-120b","messages":[{"role":"system","content":"fallback response context"},{"role":"user","content":"find fallback language support"},{"role":"assistant","content":"I will search.","tool_calls":[{"id":"call_1","type":"function","function":{"name":"search_code","arguments":{"query":"fallback language support"}}}]},{"role":"tool","tool_call_id":"call_1","name":"search_code","content":"found: fallback supports en, zh"}]}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(reqBody))
+	req.Header.Set("Authorization", "Bearer managed-key")
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 fallback, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if len(ds.uploads) != 1 {
+		t.Fatalf("expected one attempted private context upload, got %d", len(ds.uploads))
+	}
+	prompt, _ := ds.payload["prompt"].(string)
+	for _, want := range []string{
+		"fallback response context",
+		"find fallback language support",
+		"<|QNML|tool_calls>",
+		"found: fallback supports en, zh",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("expected fallback prompt to keep inline context %q, got %q", want, prompt)
+		}
+	}
+	if refIDs, _ := ds.payload["ref_file_ids"].([]any); len(refIDs) != 0 {
+		t.Fatalf("expected fallback to avoid private context refs, got %#v", ds.payload["ref_file_ids"])
 	}
 }
 
