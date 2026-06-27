@@ -935,6 +935,23 @@ func TestParseToolCallsSupportsNamedXML(t *testing.T) {
 	}
 }
 
+func TestParseToolCallsSupportsSingularJSONToolCall(t *testing.T) {
+	text := `<tool_call>{"name":"shell","parameters":{"command":"Get-ChildItem -Force","timeout":30}}</tool_call>`
+	calls := ParseToolCalls(text, []string{"shell"})
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 call, got %#v", calls)
+	}
+	if calls[0].Name != "shell" {
+		t.Fatalf("expected shell, got %q", calls[0].Name)
+	}
+	if calls[0].Input["command"] != "Get-ChildItem -Force" {
+		t.Fatalf("expected command argument, got %#v", calls[0].Input)
+	}
+	if calls[0].Input["timeout"] != float64(30) {
+		t.Fatalf("expected timeout argument, got %#v", calls[0].Input)
+	}
+}
+
 func TestParseToolCallsSupportsJSONBlockInTags(t *testing.T) {
 	text := `<tool_calls>[{"name": "Bash", "arguments": {"command": "git pull"}}]</tool_calls>`
 	calls := ParseToolCalls(text, []string{"Bash"})

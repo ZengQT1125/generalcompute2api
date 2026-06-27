@@ -41,6 +41,45 @@ func TestProcessToolSieveInterceptsXMLToolCallWithoutLeak(t *testing.T) {
 	}
 }
 
+func TestProcessToolSieveInterceptsSingularJSONToolCallWithoutLeak(t *testing.T) {
+	var state State
+	chunks := []string{
+		"好的，我来扫描一下项目结构。\n",
+		"<tool",
+		"_call>\n",
+		`{"name":"shell","parameters":{"description":"查看项目根目录结构","command":"Get-ChildItem -Force | Select-Object Name, Mode","timeout":30}}`,
+		"\n</tool_call>",
+	}
+	var events []Event
+	for _, c := range chunks {
+		events = append(events, ProcessChunk(&state, c, []string{"shell"})...)
+	}
+	events = append(events, Flush(&state, []string{"shell"})...)
+
+	var textContent strings.Builder
+	var calls int
+	var gotCommand string
+	for _, evt := range events {
+		textContent.WriteString(evt.Content)
+		for _, call := range evt.ToolCalls {
+			calls++
+			if call.Name != "shell" {
+				t.Fatalf("expected shell tool call, got %#v", call)
+			}
+			gotCommand, _ = call.Input["command"].(string)
+		}
+	}
+	if calls != 1 {
+		t.Fatalf("expected one singular JSON tool call, got %d events=%#v", calls, events)
+	}
+	if strings.Contains(textContent.String(), "<tool_call") || strings.Contains(textContent.String(), `"name":"shell"`) {
+		t.Fatalf("singular JSON tool call leaked to text: %q events=%#v", textContent.String(), events)
+	}
+	if gotCommand != "Get-ChildItem -Force | Select-Object Name, Mode" {
+		t.Fatalf("expected command argument to parse, got %q", gotCommand)
+	}
+}
+
 func TestProcessToolSieveInterceptsDSMLToolCallWithoutLeak(t *testing.T) {
 	var state State
 	chunks := []string{
@@ -647,7 +686,7 @@ func TestFindToolSegmentStartDetectsXMLToolCalls(t *testing.T) {
 		{"dsml_trailing_pipe_tag", "some text <|DSML|tool_calls| \n", 10},
 		{"dsml_extra_leading_less_than", "some text <<|DSML|tool_calls>\n", 10},
 		{"invoke_tag_missing_wrapper", "some text <invoke name=\"read_file\">\n", 10},
-		{"bare_tool_call_text", "prefix <tool_call>\n", -1},
+		{"singular_tool_call_tag", "prefix <tool_call>\n", 7},
 		{"xml_inside_code_fence", "```xml\n<tool_calls><invoke name=\"read_file\"></invoke></tool_calls>\n```", -1},
 		{"no_xml", "just plain text", -1},
 		{"gemini_json_no_detect", `some text {"functionCall":{"name":"search"}}`, -1},

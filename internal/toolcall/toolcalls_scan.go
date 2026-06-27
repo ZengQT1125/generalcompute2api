@@ -12,6 +12,7 @@ var toolMarkupNames = []toolMarkupNameAlias{
 	{raw: "tool-calls", canonical: "tool_calls", dsmlOnly: true},
 	{raw: "工具-调用", canonical: "tool_calls", dsmlOnly: true},
 	{raw: "tool_calls", canonical: "tool_calls"},
+	{raw: "tool_call", canonical: "tool_calls"},
 	{raw: "工具调用", canonical: "tool_calls", dsmlOnly: true},
 	{raw: "invoke", canonical: "invoke"},
 	{raw: "调用项", canonical: "invoke", dsmlOnly: true},
