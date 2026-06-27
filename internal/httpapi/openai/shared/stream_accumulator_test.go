@@ -1,6 +1,7 @@
 package shared
 
 import (
+	"strings"
 	"testing"
 
 	"generalcompute2api/internal/sse"
@@ -111,5 +112,18 @@ func TestStreamAccumulatorStripsInlineCitationAndReferenceMarkers(t *testing.T) 
 	}
 	if len(result.Parts) != 1 || result.Parts[0].VisibleText != "广州天气 多云" {
 		t.Fatalf("unexpected parts: %#v", result.Parts)
+	}
+}
+
+func TestCleanVisibleOutputStripsMalformedToolMarkers(t *testing.T) {
+	input := "中午好！让我先看看项目结构。\nminimaxtool_call\n<invoke name=\"shell\">\n<invoke name=\"Read\">\n<tool_call>{\"name\":\"shell\"}</tool_call>\n后续文本"
+	got := CleanVisibleOutput(input, false)
+	for _, leaked := range []string{"minimaxtool_call", "<invoke", "<tool_call", "shell", "Read"} {
+		if strings.Contains(got, leaked) {
+			t.Fatalf("expected malformed tool marker %q to be stripped, got %q", leaked, got)
+		}
+	}
+	if !strings.Contains(got, "中午好") || !strings.Contains(got, "后续文本") {
+		t.Fatalf("expected normal text to remain, got %q", got)
 	}
 }

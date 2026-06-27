@@ -36,7 +36,8 @@ func BuildToolCallInstructions(toolNames []string) string {
 9）不要用 Markdown 代码围栏包裹 XML；不要输出解释性说明、角色标记或内心独白。
 10）若调用工具，该工具块的首个非空白字符必须恰好是 ` + tcO + `。
 11）即使随后会闭合 ` + tcC + `，也禁止省略开头的 ` + tcO + ` 标签。
-12）兼容说明：运行时仍接受旧版标签 <tool_calls> / <invoke> / <parameter> 以及历史格式 <|ZJML|…> / <|DSML|…>，请优先使用本节的 <|QNML|…> 形式。
+12）禁止输出 minimaxtool_call、<tool_call>、裸 <invoke> 或任何非 QNML 工具前缀。
+13）兼容说明：运行时仍接受旧版标签 <tool_calls> / <invoke> / <parameter> 以及历史格式 <|ZJML|…> / <|DSML|…>，请优先使用本节的 <|QNML|…> 形式。
 
 参数形态：
 - 字符串 => ` + wrapParameter("x", "<![CDATA[value]]>") + `

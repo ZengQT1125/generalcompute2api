@@ -386,6 +386,40 @@ func TestHandleStreamIncompleteCapturedToolJSONFlushesAsTextOnFinalize(t *testin
 	}
 }
 
+func TestHandleStreamSuppressesMalformedMinimaxToolMarkers(t *testing.T) {
+	h := &Handler{}
+	line := func(v string) string {
+		b, _ := json.Marshal(map[string]any{"p": "response/content", "v": v})
+		return "data: " + string(b)
+	}
+	resp := makeSSEHTTPResponse(
+		line("中午好！让我先看看项目结构。\n"),
+		line("minimaxtool_call\n"),
+		line("<invoke name=\"shell\">\n"),
+		line("<invoke name=\"Read\">\n"),
+		line("<invoke name=\"shell\">\n"),
+		`data: [DONE]`,
+	)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+
+	h.handleStream(rec, req, resp, "cid-minimax-malformed", "minimax-m2.7", "prompt", 0, false, false, []string{"shell", "Read"}, nil, nil)
+
+	body := rec.Body.String()
+	for _, leaked := range []string{"minimaxtool_call", "<invoke", `"shell"`, `"Read"`} {
+		if strings.Contains(body, leaked) {
+			t.Fatalf("malformed Minimax tool marker leaked %q in body=%s", leaked, body)
+		}
+	}
+	frames, done := parseSSEDataFrames(t, body)
+	if !done {
+		t.Fatalf("expected [DONE], body=%s", body)
+	}
+	if streamHasToolCallsDelta(frames) {
+		t.Fatalf("did not expect invalid malformed markers to become tool_calls, body=%s", body)
+	}
+}
+
 func TestHandleStreamPromotesThinkingToolCallsOnFinalizeWithoutMidstreamIntercept(t *testing.T) {
 	h := &Handler{}
 	resp := makeSSEHTTPResponse(

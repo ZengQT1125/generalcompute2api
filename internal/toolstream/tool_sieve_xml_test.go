@@ -80,6 +80,42 @@ func TestProcessToolSieveInterceptsSingularJSONToolCallWithoutLeak(t *testing.T)
 	}
 }
 
+func TestProcessToolSieveSuppressesMinimaxBareInvokeRun(t *testing.T) {
+	var state State
+	chunks := []string{
+		"中午好！让我先看看项目结构。\n",
+		"minimax",
+		"tool_call\n",
+		`<invoke name="shell">` + "\n",
+		`<invoke name="Read">` + "\n",
+		`<invoke name="shell">` + "\n",
+	}
+	var events []Event
+	for _, c := range chunks {
+		events = append(events, ProcessChunk(&state, c, []string{"shell", "Read"})...)
+	}
+	events = append(events, Flush(&state, []string{"shell", "Read"})...)
+
+	var textContent strings.Builder
+	var calls int
+	for _, evt := range events {
+		textContent.WriteString(evt.Content)
+		calls += len(evt.ToolCalls)
+	}
+	if calls != 0 {
+		t.Fatalf("expected malformed bare invoke run not to become tool calls, got %d events=%#v", calls, events)
+	}
+	text := textContent.String()
+	for _, leaked := range []string{"minimaxtool_call", "<invoke", "shell", "Read"} {
+		if strings.Contains(text, leaked) {
+			t.Fatalf("malformed Minimax tool marker leaked %q in text %q events=%#v", leaked, text, events)
+		}
+	}
+	if !strings.Contains(text, "中午好") {
+		t.Fatalf("expected leading natural text to remain, got %q events=%#v", text, events)
+	}
+}
+
 func TestProcessToolSieveInterceptsDSMLToolCallWithoutLeak(t *testing.T) {
 	var state State
 	chunks := []string{

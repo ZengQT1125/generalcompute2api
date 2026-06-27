@@ -148,6 +148,22 @@ func shouldKeepBareInvokeCapture(captured string) bool {
 		strings.HasPrefix(trimmedLower, "[")
 }
 
+func hasMalformedExecutableToolMarker(captured string) bool {
+	lowered := strings.ToLower(captured)
+	return strings.Contains(lowered, "minimaxtool_call") ||
+		hasSingularToolCallMarker(lowered) ||
+		strings.Count(lowered, "<invoke") > 1
+}
+
+func hasSingularToolCallMarker(lowered string) bool {
+	for _, marker := range []string{"<tool_call>", "<tool_call ", "<tool_call\n", "<tool_call\r", "<tool_call\t"} {
+		if strings.Contains(lowered, marker) {
+			return true
+		}
+	}
+	return false
+}
+
 func findPartialXMLToolTagStart(s string) int {
 	lastLT := strings.LastIndex(s, "<")
 	if lastLT < 0 {

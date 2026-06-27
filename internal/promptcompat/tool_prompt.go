@@ -52,6 +52,7 @@ func injectToolPrompt(messages []map[string]any, tools []any, policy ToolChoiceP
 		"IMPORTANT: When the task requires files, shell, web, browser, agents, skills, or other tools, emit a QNML tool call immediately instead of explaining what you would do.",
 		"IMPORTANT: Complete multi-step user tasks by continuing to call tools across turns until the task is done.",
 		"IMPORTANT: Do not claim an available action name is unavailable. QNML blocks are client-parsed text markers, not native function calls.",
+		"IMPORTANT: Never emit native tool syntax such as minimaxtool_call, <tool_call>, bare <invoke>, function_call, or JSON-only tool calls. Use only a complete <|QNML|tool_calls>...</|QNML|tool_calls> block.",
 		"You have access to these client-side tools:",
 		"",
 		strings.Join(toolSchemas, "\n\n"),

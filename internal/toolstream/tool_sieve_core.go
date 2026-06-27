@@ -1,6 +1,10 @@
 package toolstream
 
-import "generalcompute2api/internal/toolcall"
+import (
+	"strings"
+
+	"generalcompute2api/internal/toolcall"
+)
 
 func ProcessChunk(state *State, chunk string, toolNames []string) []Event {
 	if state == nil {
@@ -122,13 +126,13 @@ func Flush(state *State, toolNames []string) []Event {
 							state.noteText(suffix)
 							events = append(events, Event{Content: suffix})
 						}
-					} else {
+					} else if !hasMalformedExecutableToolMarker(content) {
 						// If capture never resolved into a real tool call, release
 						// the buffered text instead of swallowing it.
 						state.noteText(content)
 						events = append(events, Event{Content: content})
 					}
-				} else {
+				} else if !hasMalformedExecutableToolMarker(content) {
 					// If capture never resolved into a real tool call, release the
 					// buffered text instead of swallowing it.
 					state.noteText(content)
@@ -143,8 +147,10 @@ func Flush(state *State, toolNames []string) []Event {
 	if state.pending.Len() > 0 {
 		content := state.pending.String()
 		// If pending never resolved into a real tool call, release it as text.
-		state.noteText(content)
-		events = append(events, Event{Content: content})
+		if !hasMalformedExecutableToolMarker(content) {
+			state.noteText(content)
+			events = append(events, Event{Content: content})
+		}
 		state.pending.Reset()
 	}
 	return events
@@ -163,12 +169,24 @@ func splitSafeContentForToolDetection(state *State, s string) (safe, hold string
 		}
 		return "", s
 	}
+	if holdStart := findPartialMinimaxToolCallStart(s); holdStart >= 0 {
+		if insideCodeFenceWithState(state, s[:holdStart]) {
+			return s, ""
+		}
+		if holdStart > 0 {
+			return s[:holdStart], s[holdStart:]
+		}
+		return "", s
+	}
 	return s, ""
 }
 
 func findToolSegmentStart(state *State, s string) int {
 	if s == "" {
 		return -1
+	}
+	if start := findMinimaxToolCallStart(state, s); start >= 0 {
+		return start
 	}
 	offset := 0
 	for {
@@ -184,11 +202,53 @@ func findToolSegmentStart(state *State, s string) int {
 	}
 }
 
+func findMinimaxToolCallStart(state *State, s string) int {
+	lower := strings.ToLower(s)
+	const marker = "minimaxtool_call"
+	for offset := 0; offset < len(lower); {
+		idx := strings.Index(lower[offset:], marker)
+		if idx < 0 {
+			return -1
+		}
+		idx += offset
+		lineStart := strings.LastIndexAny(s[:idx], "\r\n") + 1
+		if strings.TrimSpace(s[lineStart:idx]) == "" && !insideCodeFenceWithState(state, s[:idx]) {
+			return idx
+		}
+		offset = idx + len(marker)
+	}
+	return -1
+}
+
+func findPartialMinimaxToolCallStart(s string) int {
+	lower := strings.ToLower(s)
+	const marker = "minimaxtool_call"
+	maxLen := minInt(len(lower), len(marker)-1)
+	for n := maxLen; n >= 4; n-- {
+		tail := lower[len(lower)-n:]
+		if strings.HasPrefix(marker, tail) {
+			start := len(s) - n
+			lineStart := strings.LastIndexAny(s[:start], "\r\n") + 1
+			if strings.TrimSpace(s[lineStart:start]) == "" {
+				return start
+			}
+		}
+	}
+	return -1
+}
+
 func includeDuplicateLeadingLessThan(s string, idx int) int {
 	for idx > 0 && s[idx-1] == '<' {
 		idx--
 	}
 	return idx
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func consumeToolCapture(state *State, toolNames []string) (prefix string, calls []toolcall.ParsedToolCall, suffix string, ready bool) {
@@ -206,6 +266,9 @@ func consumeToolCapture(state *State, toolNames []string) (prefix string, calls 
 		return "", nil, "", false
 	}
 	if shouldKeepBareInvokeCapture(captured) {
+		return "", nil, "", false
+	}
+	if hasMalformedExecutableToolMarker(captured) {
 		return "", nil, "", false
 	}
 	return captured, nil, "", true
