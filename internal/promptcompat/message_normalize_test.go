@@ -38,10 +38,10 @@ func TestNormalizeOpenAIMessagesForPrompt_AssistantToolCallsAndToolResult(t *tes
 		t.Fatalf("expected 4 normalized messages with assistant tool history preserved, got %d", len(normalized))
 	}
 	assistantContent, _ := normalized[2]["content"].(string)
-	if !strings.Contains(assistantContent, "<|ZJML|工具调用>") {
-		t.Fatalf("assistant tool history should be preserved in ZJML form, got %q", assistantContent)
+	if !strings.Contains(assistantContent, "<|QNML|tool_calls>") {
+		t.Fatalf("assistant tool history should be preserved in QNML form, got %q", assistantContent)
 	}
-	if !strings.Contains(assistantContent, `<|ZJML|调用项 name="get_weather">`) {
+	if !strings.Contains(assistantContent, `<|QNML|invoke name="u_get_weather">`) {
 		t.Fatalf("expected tool name in preserved history, got %q", assistantContent)
 	}
 	if !strings.Contains(normalized[3]["content"].(string), `"temp":18`) {
@@ -49,7 +49,7 @@ func TestNormalizeOpenAIMessagesForPrompt_AssistantToolCallsAndToolResult(t *tes
 	}
 
 	prompt := util.MessagesPrepare(normalized)
-	if !strings.Contains(prompt, "<|ZJML|工具调用>") {
+	if !strings.Contains(prompt, "<|QNML|tool_calls>") {
 		t.Fatalf("expected preserved assistant tool history in prompt: %q", prompt)
 	}
 }
@@ -177,10 +177,10 @@ func TestNormalizeOpenAIMessagesForPrompt_AssistantMultipleToolCallsRemainSepara
 		t.Fatalf("expected assistant tool_call-only message preserved, got %#v", normalized)
 	}
 	content, _ := normalized[0]["content"].(string)
-	if strings.Count(content, "<|ZJML|调用项 name=") != 2 {
+	if strings.Count(content, "<|QNML|invoke name=") != 2 {
 		t.Fatalf("expected two preserved tool call blocks, got %q", content)
 	}
-	if !strings.Contains(content, `<|ZJML|调用项 name="search_web">`) || !strings.Contains(content, `<|ZJML|调用项 name="eval_javascript">`) {
+	if !strings.Contains(content, `<|QNML|invoke name="u_search_web">`) || !strings.Contains(content, `<|QNML|invoke name="u_eval_javascript">`) {
 		t.Fatalf("expected both tool names in preserved history, got %q", content)
 	}
 }
@@ -258,7 +258,7 @@ func TestNormalizeOpenAIMessagesForPrompt_AssistantNilContentDoesNotInjectNullLi
 	if strings.Contains(content, "null") {
 		t.Fatalf("expected no null literal injection, got %q", content)
 	}
-	if !strings.Contains(content, "<|ZJML|工具调用>") {
+	if !strings.Contains(content, "<|QNML|tool_calls>") {
 		t.Fatalf("expected assistant tool history in normalized content, got %q", content)
 	}
 }

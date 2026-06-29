@@ -41,6 +41,164 @@ func TestProcessToolSieveInterceptsXMLToolCallWithoutLeak(t *testing.T) {
 	}
 }
 
+func TestProcessToolSieveInterceptsSingularJSONToolCallWithoutLeak(t *testing.T) {
+	var state State
+	chunks := []string{
+		"好的，我来扫描一下项目结构。\n",
+		"<tool",
+		"_call>\n",
+		`{"name":"shell","parameters":{"description":"查看项目根目录结构","command":"Get-ChildItem -Force | Select-Object Name, Mode","timeout":30}}`,
+		"\n</tool_call>",
+	}
+	var events []Event
+	for _, c := range chunks {
+		events = append(events, ProcessChunk(&state, c, []string{"shell"})...)
+	}
+	events = append(events, Flush(&state, []string{"shell"})...)
+
+	var textContent strings.Builder
+	var calls int
+	var gotCommand string
+	for _, evt := range events {
+		textContent.WriteString(evt.Content)
+		for _, call := range evt.ToolCalls {
+			calls++
+			if call.Name != "shell" {
+				t.Fatalf("expected shell tool call, got %#v", call)
+			}
+			gotCommand, _ = call.Input["command"].(string)
+		}
+	}
+	if calls != 1 {
+		t.Fatalf("expected one singular JSON tool call, got %d events=%#v", calls, events)
+	}
+	if strings.Contains(textContent.String(), "<tool_call") || strings.Contains(textContent.String(), `"name":"shell"`) {
+		t.Fatalf("singular JSON tool call leaked to text: %q events=%#v", textContent.String(), events)
+	}
+	if gotCommand != "Get-ChildItem -Force | Select-Object Name, Mode" {
+		t.Fatalf("expected command argument to parse, got %q", gotCommand)
+	}
+}
+
+func TestProcessToolSieveSuppressesMinimaxBareInvokeRun(t *testing.T) {
+	var state State
+	chunks := []string{
+		"中午好！让我先看看项目结构。\n",
+		"minimax",
+		"tool_call\n",
+		`<invoke name="shell">` + "\n",
+		`<invoke name="Read">` + "\n",
+		`<invoke name="shell">` + "\n",
+	}
+	var events []Event
+	for _, c := range chunks {
+		events = append(events, ProcessChunk(&state, c, []string{"shell", "Read"})...)
+	}
+	events = append(events, Flush(&state, []string{"shell", "Read"})...)
+
+	var textContent strings.Builder
+	var calls int
+	for _, evt := range events {
+		textContent.WriteString(evt.Content)
+		calls += len(evt.ToolCalls)
+	}
+	if calls != 0 {
+		t.Fatalf("expected malformed bare invoke run not to become tool calls, got %d events=%#v", calls, events)
+	}
+	text := textContent.String()
+	for _, leaked := range []string{"minimaxtool_call", "<invoke", "shell", "Read"} {
+		if strings.Contains(text, leaked) {
+			t.Fatalf("malformed Minimax tool marker leaked %q in text %q events=%#v", leaked, text, events)
+		}
+	}
+	if !strings.Contains(text, "中午好") {
+		t.Fatalf("expected leading natural text to remain, got %q events=%#v", text, events)
+	}
+}
+
+func TestProcessToolSieveParsesMinimaxParameterBlock(t *testing.T) {
+	var state State
+	chunks := []string{
+		"好的，让我先看看项目结构。\n",
+		"minimax",
+		"tool_call\n",
+		`**$null | % { Get-ChildItem -Path $pwd -Force }**` + "\n\n",
+		`<parameter name="command">Get-ChildItem -Path . -Force -ErrorAction SilentlyContinue | Select-Object Name, Mode</parameter>` + "\n",
+		`<parameter name="cwd">G:\工作资料\scnet</parameter>` + "\n\n",
+		"</minimaxtool_call>",
+	}
+	var events []Event
+	for _, c := range chunks {
+		events = append(events, ProcessChunk(&state, c, []string{"shell"})...)
+	}
+	events = append(events, Flush(&state, []string{"shell"})...)
+
+	var textContent strings.Builder
+	var calls []string
+	var gotCommand string
+	for _, evt := range events {
+		textContent.WriteString(evt.Content)
+		for _, call := range evt.ToolCalls {
+			calls = append(calls, call.Name)
+			gotCommand, _ = call.Input["command"].(string)
+		}
+	}
+	if len(calls) != 1 || calls[0] != "shell" {
+		t.Fatalf("expected one shell tool call, got calls=%v events=%#v", calls, events)
+	}
+	if strings.Contains(textContent.String(), "minimaxtool_call") || strings.Contains(textContent.String(), "<parameter") {
+		t.Fatalf("Minimax tool block leaked to text %q events=%#v", textContent.String(), events)
+	}
+	if !strings.Contains(textContent.String(), "好的") {
+		t.Fatalf("expected leading text to remain, got %q events=%#v", textContent.String(), events)
+	}
+	if gotCommand == "" || !strings.Contains(gotCommand, "Get-ChildItem") {
+		t.Fatalf("expected command argument to parse, got %q", gotCommand)
+	}
+}
+
+func TestProcessToolSieveParsesShellCodeFenceWithoutLeak(t *testing.T) {
+	var state State
+	chunks := []string{
+		"好的，我先看看项目结构。\n",
+		"```pow",
+		"ershell\n",
+		"Get-ChildItem -Path . -Force | Select-Object Name, Mode\n",
+		"```",
+	}
+	var events []Event
+	for _, c := range chunks {
+		events = append(events, ProcessChunk(&state, c, []string{"shell"})...)
+	}
+	events = append(events, Flush(&state, []string{"shell"})...)
+
+	var textContent strings.Builder
+	var calls int
+	var gotCommand string
+	for _, evt := range events {
+		textContent.WriteString(evt.Content)
+		for _, call := range evt.ToolCalls {
+			calls++
+			if call.Name != "shell" {
+				t.Fatalf("expected shell tool call, got %#v", call)
+			}
+			gotCommand, _ = call.Input["command"].(string)
+		}
+	}
+	if calls != 1 {
+		t.Fatalf("expected one shell tool call, got %d events=%#v", calls, events)
+	}
+	if strings.Contains(textContent.String(), "```powershell") || strings.Contains(textContent.String(), "Get-ChildItem") {
+		t.Fatalf("shell fence leaked to text: %q events=%#v", textContent.String(), events)
+	}
+	if !strings.Contains(textContent.String(), "好的") {
+		t.Fatalf("expected leading prose to remain, got %q events=%#v", textContent.String(), events)
+	}
+	if gotCommand != "Get-ChildItem -Path . -Force | Select-Object Name, Mode" {
+		t.Fatalf("expected command argument to parse, got %q", gotCommand)
+	}
+}
+
 func TestProcessToolSieveInterceptsDSMLToolCallWithoutLeak(t *testing.T) {
 	var state State
 	chunks := []string{
@@ -647,7 +805,7 @@ func TestFindToolSegmentStartDetectsXMLToolCalls(t *testing.T) {
 		{"dsml_trailing_pipe_tag", "some text <|DSML|tool_calls| \n", 10},
 		{"dsml_extra_leading_less_than", "some text <<|DSML|tool_calls>\n", 10},
 		{"invoke_tag_missing_wrapper", "some text <invoke name=\"read_file\">\n", 10},
-		{"bare_tool_call_text", "prefix <tool_call>\n", -1},
+		{"singular_tool_call_tag", "prefix <tool_call>\n", 7},
 		{"xml_inside_code_fence", "```xml\n<tool_calls><invoke name=\"read_file\"></invoke></tool_calls>\n```", -1},
 		{"no_xml", "just plain text", -1},
 		{"gemini_json_no_detect", `some text {"functionCall":{"name":"search"}}`, -1},

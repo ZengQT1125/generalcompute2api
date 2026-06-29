@@ -17,7 +17,7 @@ func TestGetModelRouteDirectAndAlias(t *testing.T) {
 	registerOpenAITestRoutes(r, h)
 
 	t.Run("flash", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/v1/models/deepseek-v4-flash", nil)
+		req := httptest.NewRequest(http.MethodGet, "/v1/models/gpt-oss-120b", nil)
 		rec := httptest.NewRecorder()
 		r.ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {
@@ -35,7 +35,7 @@ func TestGetModelRouteDirectAndAlias(t *testing.T) {
 	})
 
 	t.Run("nothinking_rejected", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/v1/models/deepseek-v4-flash-nothinking", nil)
+		req := httptest.NewRequest(http.MethodGet, "/v1/models/gpt-oss-120b-nothinking", nil)
 		rec := httptest.NewRecorder()
 		r.ServeHTTP(rec, req)
 		if rec.Code != http.StatusNotFound {
@@ -103,7 +103,7 @@ func TestGetModelByIDIncludesContextLength(t *testing.T) {
 	r := chi.NewRouter()
 	registerOpenAITestRoutes(r, h)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/models/deepseek-v4-flash", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/models/gpt-oss-120b", nil)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {

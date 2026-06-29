@@ -10,7 +10,7 @@ func TestStandardRequestCompletionPayloadSetsModelTypeFromResolvedModel(t *testi
 		search    bool
 		modelType string
 	}{
-		{name: "default", model: "deepseek-v4-flash", thinking: false, search: false, modelType: "default"},
+		{name: "default", model: "gpt-oss-120b", thinking: false, search: false, modelType: "default"},
 	}
 
 	for _, tc := range tests {
@@ -56,7 +56,7 @@ func TestStandardRequestCompletionPayloadSetsModelTypeFromResolvedModel(t *testi
 
 func TestStandardRequestCompletionPayloadPassThroughCannotForceExpert(t *testing.T) {
 	req := StandardRequest{
-		ResolvedModel: "deepseek-v4-flash",
+		ResolvedModel: "gpt-oss-120b",
 		FinalPrompt:   "hello",
 		Thinking:      true,
 		Search:        false,
@@ -72,7 +72,7 @@ func TestStandardRequestCompletionPayloadPassThroughCannotForceExpert(t *testing
 
 func TestStandardRequestCompletionPayloadPassThroughDeepseekProString(t *testing.T) {
 	req := StandardRequest{
-		ResolvedModel: "deepseek-v4-flash",
+		ResolvedModel: "gpt-oss-120b",
 		FinalPrompt:   "hello",
 		PassThrough: map[string]any{
 			"model_type": "deepseek-v4-pro",

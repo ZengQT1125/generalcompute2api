@@ -2,6 +2,8 @@ package config
 
 import "strings"
 
+const AdvertisedMaxContextTokens = 128000
+
 type ModelInfo struct {
 	ID            string `json:"id"`
 	Object        string `json:"object"`
@@ -11,17 +13,18 @@ type ModelInfo struct {
 	Permission    []any  `json:"permission,omitempty"`
 }
 
-// 仅公开这三个模型
+// 仅公开这三个模型加上必要的兼容隐藏/测试模型
 var GLModels = []ModelInfo{
 	{ID: "deepseek-v3.2", Object: "model", Created: 1718000000, OwnedBy: "generalcompute", ContextLength: 128000, Permission: []any{}},
 	{ID: "deepseek-v3.1", Object: "model", Created: 1718000000, OwnedBy: "generalcompute", ContextLength: 128000, Permission: []any{}},
 	{ID: "minimax-m2.7", Object: "model", Created: 1718000000, OwnedBy: "generalcompute", ContextLength: 128000, Permission: []any{}},
+	{ID: "gpt-oss-120b", Object: "model", Created: 1718000000, OwnedBy: "generalcompute", ContextLength: 128000, Permission: []any{}},
 }
 
 func ResolveModel(requested string) (string, bool) {
 	requested = strings.ToLower(strings.TrimSpace(requested))
 	switch requested {
-	case "deepseek-v3.2", "deepseek-v3.1", "minimax-m2.7":
+	case "deepseek-v3.2", "deepseek-v3.1", "minimax-m2.7", "gpt-oss-120b":
 		return requested, true
 	case "minimax2.7", "minimax-2.7", "minimax-m2-7":
 		return "minimax-m2.7", true

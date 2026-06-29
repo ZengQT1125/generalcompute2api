@@ -83,6 +83,16 @@
             <button type="button" class="tab" data-tab="all">全部</button>
           </div>
 
+          <div class="batch-bar hidden" id="batchBar">
+            <span class="batch-info">已选择 <strong id="selectedCount">0</strong> 个账号</span>
+            <div class="batch-buttons">
+              <button type="button" class="btn sm primary" id="btnBatchTest">批量测号</button>
+              <button type="button" class="btn sm" id="btnBatchRestore">批量恢复</button>
+              <button type="button" class="btn sm danger" id="btnBatchDiscard">批量作废</button>
+              <button type="button" class="btn sm danger" id="btnBatchDelete">批量删除</button>
+            </div>
+          </div>
+
           <div class="pagination-bar" id="paginationBar">
             <div class="pagination-size">
               <span>每页显示：</span>
@@ -114,6 +124,7 @@
             <table>
               <thead>
                 <tr>
+                  <th style="width: 40px; text-align: center;"><input type="checkbox" id="chkSelectAll"></th>
                   <th>#</th>
                   <th>账号</th>
                   <th>Token</th>
@@ -181,6 +192,6 @@
   </dialog>
 
   <div id="toast" class="toast hidden"></div>
-  <script src="app.js?v=v2.3.0"></script>
+  <script src="app.js?v=v2.5.1"></script>
 </body>
 </html>

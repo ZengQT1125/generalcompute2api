@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -39,6 +40,8 @@ func (managedFilesAuthStub) DetermineCaller(_ *http.Request) (*auth.RequestAuth,
 }
 
 func (managedFilesAuthStub) Release(_ *auth.RequestAuth) {}
+
+func (managedFilesAuthStub) MarkAccountCooldown(_ string, _ time.Duration) {}
 
 type filesRouteDSStub struct {
 	lastReq dsclient.UploadFileRequest
@@ -124,7 +127,7 @@ func TestFilesRouteUploadSuccess(t *testing.T) {
 	r := chi.NewRouter()
 	registerOpenAITestRoutes(r, h)
 
-	req := newMultipartUploadRequest(t, "assistants", "notes.txt", []byte("hello world"), "deepseek-v4-flash")
+	req := newMultipartUploadRequest(t, "assistants", "notes.txt", []byte("hello world"), "gpt-oss-120b")
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -164,7 +167,7 @@ func TestFilesRouteUploadIncludesAccountIDForManagedAccount(t *testing.T) {
 	r := chi.NewRouter()
 	registerOpenAITestRoutes(r, h)
 
-	req := newMultipartUploadRequest(t, "assistants", "notes.txt", []byte("hello world"), "deepseek-v4-flash")
+	req := newMultipartUploadRequest(t, "assistants", "notes.txt", []byte("hello world"), "gpt-oss-120b")
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 

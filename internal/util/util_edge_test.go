@@ -72,11 +72,11 @@ func TestToBoolFalse(t *testing.T) {
 }
 
 func TestToBoolNonBool(t *testing.T) {
-	if ToBool("true") {
-		t.Fatal("expected false for string 'true'")
+	if !ToBool("true") {
+		t.Fatal("expected true for string 'true'")
 	}
-	if ToBool(1) {
-		t.Fatal("expected false for int 1")
+	if !ToBool(1) {
+		t.Fatal("expected true for int 1")
 	}
 	if ToBool(nil) {
 		t.Fatal("expected false for nil")

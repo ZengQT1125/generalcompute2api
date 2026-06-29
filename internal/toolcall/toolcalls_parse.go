@@ -21,11 +21,33 @@ func ParseToolCalls(text string, availableToolNames []string) []ParsedToolCall {
 }
 
 func ParseToolCallsDetailed(text string, availableToolNames []string) ToolCallParseResult {
-	return parseToolCallsDetailedXMLOnly(text)
+	res := parseToolCallsDetailedXMLOnly(text)
+	if len(res.Calls) > 0 {
+		res.Calls = canonicalizeParsedToolCalls(res.Calls, availableToolNames)
+		return res
+	}
+	if calls, ok := parseMultiFormatToolCalls(text, availableToolNames); ok && len(calls) > 0 {
+		return ToolCallParseResult{
+			Calls:             canonicalizeParsedToolCalls(calls, availableToolNames),
+			SawToolCallSyntax: true,
+		}
+	}
+	return res
 }
 
 func ParseStandaloneToolCallsDetailed(text string, availableToolNames []string) ToolCallParseResult {
-	return parseToolCallsDetailedXMLOnly(text)
+	res := parseToolCallsDetailedXMLOnly(text)
+	if len(res.Calls) > 0 {
+		res.Calls = canonicalizeParsedToolCalls(res.Calls, availableToolNames)
+		return res
+	}
+	if calls, ok := parseMultiFormatToolCalls(text, availableToolNames); ok && len(calls) > 0 {
+		return ToolCallParseResult{
+			Calls:             canonicalizeParsedToolCalls(calls, availableToolNames),
+			SawToolCallSyntax: true,
+		}
+	}
+	return res
 }
 
 func ParseAssistantToolCallsDetailed(text, thinking string, availableToolNames []string) ToolCallParseResult {
@@ -144,8 +166,6 @@ func stripFencedCodeBlocks(text string) string {
 	fenceMarker := ""
 	inCDATA := false
 	cdataFenceMarker := ""
-	// Track builder length when a fence opens so we can preserve content
-	// collected before the unclosed fence.
 	beforeFenceLen := 0
 	for _, line := range lines {
 		if inCDATA || cdataStartsBeforeFence(line) {
@@ -172,8 +192,6 @@ func stripFencedCodeBlocks(text string) string {
 	}
 
 	if inFence {
-		// Unclosed fence: preserve content that was collected before the
-		// fence started rather than dropping everything.
 		result := b.String()
 		if beforeFenceLen > 0 && beforeFenceLen <= len(result) {
 			return result[:beforeFenceLen]

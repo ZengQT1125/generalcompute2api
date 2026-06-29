@@ -16,6 +16,7 @@ Thumbs.db
 .codegraph/
 .agents/
 ref/
+qwen2API-main/
 
 # Local compiler caches
 .gocache/

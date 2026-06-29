@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -58,11 +57,13 @@ func (h *Handler) applyCurrentInputFile(ctx context.Context, a *auth.RequestAuth
 	}
 	result, err := privatecontext.Upload(ctx, h.DS, a, uploadReq, 3, privatecontext.Key(a, modelType, contextText))
 	if err != nil {
-		return stdReq, fmt.Errorf("upload private context: %w", err)
+		config.Logger.Warn("[current_input_file] private context upload failed; falling back to inline prompt", "surface", "openai.responses", "error", err)
+		return stdReq, nil
 	}
 	fileID := strings.TrimSpace(result.ID)
 	if fileID == "" {
-		return stdReq, errors.New("upload private context returned empty file id")
+		config.Logger.Warn("[current_input_file] private context upload returned empty file id; falling back to inline prompt", "surface", "openai.responses")
+		return stdReq, nil
 	}
 
 	liveMessages := []any{

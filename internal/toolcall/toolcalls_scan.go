@@ -12,6 +12,7 @@ var toolMarkupNames = []toolMarkupNameAlias{
 	{raw: "tool-calls", canonical: "tool_calls", dsmlOnly: true},
 	{raw: "工具-调用", canonical: "tool_calls", dsmlOnly: true},
 	{raw: "tool_calls", canonical: "tool_calls"},
+	{raw: "tool_call", canonical: "tool_calls"},
 	{raw: "工具调用", canonical: "tool_calls", dsmlOnly: true},
 	{raw: "invoke", canonical: "invoke"},
 	{raw: "调用项", canonical: "invoke", dsmlOnly: true},
@@ -219,6 +220,9 @@ func IsPartialToolMarkupTagPrefix(text string) bool {
 		if strings.HasPrefix("zjml", lower[i:]) {
 			return true
 		}
+		if strings.HasPrefix("qnml", lower[i:]) {
+			return true
+		}
 		next, ok := consumeToolMarkupNamePrefixOnce(lower, text, i)
 		if !ok {
 			return false
@@ -256,6 +260,13 @@ func consumeToolMarkupNamePrefixOnce(lower, text string, idx int) (int, bool) {
 	}
 	if strings.HasPrefix(lower[idx:], "zjml") {
 		next := idx + len("zjml")
+		if next < len(text) && (text[next] == '-' || text[next] == '_') {
+			next++
+		}
+		return next, true
+	}
+	if strings.HasPrefix(lower[idx:], "qnml") {
+		next := idx + len("qnml")
 		if next < len(text) && (text[next] == '-' || text[next] == '_') {
 			next++
 		}

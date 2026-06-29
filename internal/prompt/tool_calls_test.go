@@ -9,7 +9,7 @@ func TestStringifyToolCallArgumentsPreservesConcatenatedJSON(t *testing.T) {
 	}
 }
 
-func TestFormatToolCallsForPromptZJML(t *testing.T) {
+func TestFormatToolCallsForPromptQNML(t *testing.T) {
 	got := FormatToolCallsForPrompt([]any{
 		map[string]any{
 			"id": "call_1",
@@ -22,7 +22,7 @@ func TestFormatToolCallsForPromptZJML(t *testing.T) {
 	if got == "" {
 		t.Fatal("expected non-empty formatted tool calls")
 	}
-	want := "<|ZJML|工具调用>\n  <|ZJML|调用项 name=\"search_web\">\n    <|ZJML|形参 name=\"query\"><![CDATA[latest]]></|ZJML|形参>\n  </|ZJML|调用项>\n</|ZJML|工具调用>"
+	want := "<|QNML|tool_calls>\n  <|QNML|invoke name=\"u_search_web\">\n    <|QNML|parameter name=\"query\"><![CDATA[latest]]></|QNML|parameter>\n  </|QNML|invoke>\n</|QNML|tool_calls>"
 	if got != want {
 		t.Fatalf("unexpected formatted tool call markup: %q", got)
 	}
@@ -35,7 +35,7 @@ func TestFormatToolCallsForPromptEscapesXMLEntities(t *testing.T) {
 			"arguments": `{"q":"a < b && c > d"}`,
 		},
 	})
-	want := "<|ZJML|工具调用>\n  <|ZJML|调用项 name=\"search&lt;&amp;&gt;\">\n    <|ZJML|形参 name=\"q\"><![CDATA[a < b && c > d]]></|ZJML|形参>\n  </|ZJML|调用项>\n</|ZJML|工具调用>"
+	want := "<|QNML|tool_calls>\n  <|QNML|invoke name=\"u_search&lt;&amp;&gt;\">\n    <|QNML|parameter name=\"q\"><![CDATA[a < b && c > d]]></|QNML|parameter>\n  </|QNML|invoke>\n</|QNML|tool_calls>"
 	if got != want {
 		t.Fatalf("unexpected escaped tool call XML: %q", got)
 	}
@@ -51,7 +51,7 @@ func TestFormatToolCallsForPromptUsesCDATAForMultilineContent(t *testing.T) {
 			},
 		},
 	})
-	want := "<|ZJML|工具调用>\n  <|ZJML|调用项 name=\"write_file\">\n    <|ZJML|形参 name=\"content\"><![CDATA[#!/bin/bash\nprintf \"hello\"\n]]></|ZJML|形参>\n    <|ZJML|形参 name=\"path\"><![CDATA[script.sh]]></|ZJML|形参>\n  </|ZJML|调用项>\n</|ZJML|工具调用>"
+	want := "<|QNML|tool_calls>\n  <|QNML|invoke name=\"u_write_file\">\n    <|QNML|parameter name=\"content\"><![CDATA[#!/bin/bash\nprintf \"hello\"\n]]></|QNML|parameter>\n    <|QNML|parameter name=\"path\"><![CDATA[script.sh]]></|QNML|parameter>\n  </|QNML|invoke>\n</|QNML|tool_calls>"
 	if got != want {
 		t.Fatalf("unexpected multiline cdata tool call XML: %q", got)
 	}

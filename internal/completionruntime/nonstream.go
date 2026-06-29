@@ -51,9 +51,6 @@ type StartResult struct {
 }
 
 func StartCompletion(ctx context.Context, ds DeepSeekCaller, a *auth.RequestAuth, stdReq promptcompat.StandardRequest, opts Options) (StartResult, *assistantturn.OutputError) {
-	if gateErr := userContextOverGate(stdReq); gateErr != nil {
-		return StartResult{Request: stdReq}, gateErr
-	}
 	maxAttempts := opts.MaxAttempts
 	if maxAttempts <= 0 {
 		maxAttempts = 3

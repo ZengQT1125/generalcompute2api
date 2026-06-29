@@ -53,17 +53,17 @@ func (r *Runner) caseModelsOpenAI(ctx context.Context, cc *caseContext) error {
 	}
 	cc.assert("status_200", resp.StatusCode == http.StatusOK, fmt.Sprintf("status=%d", resp.StatusCode))
 	ids := extractModelIDs(resp.Body)
-	cc.assert("has_deepseek_flash", contains(ids, "deepseek-v4-flash"), strings.Join(ids, ","))
+	cc.assert("has_gpt_oss_120b", contains(ids, "gpt-oss-120b"), strings.Join(ids, ","))
 	cc.assert("no_deepseek_pro", !contains(ids, "deepseek-v4-pro"), strings.Join(ids, ","))
-	cc.assert("only_one_model", len(ids) == 1, strings.Join(ids, ","))
-	cc.assert("no_nothinking_skus", !contains(ids, "deepseek-v4-flash-nothinking") && !contains(ids, "deepseek-v4-pro-nothinking"), strings.Join(ids, ","))
+	cc.assert("four_models", len(ids) == 4, strings.Join(ids, ","))
+	cc.assert("no_nothinking_skus", !contains(ids, "gpt-oss-120b-nothinking") && !contains(ids, "deepseek-v4-pro-nothinking"), strings.Join(ids, ","))
 	cc.assert("no_retired_skus", !contains(ids, "deepseek-v4-vision"), strings.Join(ids, ","))
 	assertListModelsContextLength(cc, resp.Body, config.AdvertisedMaxContextTokens)
 	return nil
 }
 
 func (r *Runner) caseModelOpenAIByID(ctx context.Context, cc *caseContext) error {
-	resp, err := cc.request(ctx, requestSpec{Method: http.MethodGet, Path: "/v1/models/deepseek-v4-flash", Retryable: true})
+	resp, err := cc.request(ctx, requestSpec{Method: http.MethodGet, Path: "/v1/models/gpt-oss-120b", Retryable: true})
 	if err != nil {
 		return err
 	}
@@ -71,7 +71,7 @@ func (r *Runner) caseModelOpenAIByID(ctx context.Context, cc *caseContext) error
 	var m map[string]any
 	_ = json.Unmarshal(resp.Body, &m)
 	cc.assert("object_model", asString(m["object"]) == "model", fmt.Sprintf("body=%s", string(resp.Body)))
-	cc.assert("id_deepseek_chat", asString(m["id"]) == "deepseek-v4-flash", fmt.Sprintf("body=%s", string(resp.Body)))
+	cc.assert("id_gpt_oss_120b", asString(m["id"]) == "gpt-oss-120b", fmt.Sprintf("body=%s", string(resp.Body)))
 	got, ok := jsonNumberToInt(m["context_length"])
 	cc.assert("context_length", ok && got == config.AdvertisedMaxContextTokens, fmt.Sprintf("body=%s", string(resp.Body)))
 	return nil
@@ -84,7 +84,7 @@ func (r *Runner) caseChatNonstream(ctx context.Context, cc *caseContext) error {
 			"Authorization": "Bearer " + r.apiKey,
 		},
 		Body: map[string]any{
-			"model": "deepseek-v4-flash",
+			"model": "gpt-oss-120b",
 			"messages": []map[string]any{
 				{"role": "user", "content": "请简单回复一句话"},
 			},
@@ -112,7 +112,7 @@ func (r *Runner) caseChatStream(ctx context.Context, cc *caseContext) error {
 			"Authorization": "Bearer " + r.apiKey,
 		},
 		Body: map[string]any{
-			"model": "deepseek-v4-flash",
+			"model": "gpt-oss-120b",
 			"messages": []map[string]any{
 				{"role": "user", "content": "请流式回复一句话"},
 			},

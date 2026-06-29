@@ -56,7 +56,7 @@ func TestExecuteNonStreamWithRetryBuildsCanonicalTurn(t *testing.T) {
 	)}}
 	stdReq := promptcompat.StandardRequest{
 		Surface:         "test",
-		ResponseModel:   "deepseek-v4-flash",
+		ResponseModel:   "gpt-oss-120b",
 		PromptTokenText: "prompt",
 		FinalPrompt:     "final prompt",
 		ToolNames:       []string{"Write"},
@@ -99,7 +99,7 @@ func TestExecuteNonStreamWithRetryUsesSameAccountSyntheticEmptyRetry(t *testing.
 	}}
 	stdReq := promptcompat.StandardRequest{
 		Surface:         "test",
-		ResponseModel:   "deepseek-v4-flash",
+		ResponseModel:   "gpt-oss-120b",
 		PromptTokenText: "prompt",
 		FinalPrompt:     "final prompt",
 	}
@@ -123,7 +123,7 @@ func TestExecuteNonStreamWithRetryConvertsReferenceMarkers(t *testing.T) {
 	)}}
 	stdReq := promptcompat.StandardRequest{
 		Surface:         "test",
-		ResponseModel:   "deepseek-v4-flash-search",
+		ResponseModel:   "gpt-oss-120b-search",
 		PromptTokenText: "prompt",
 		FinalPrompt:     "final prompt",
 		Search:          true,
@@ -143,9 +143,9 @@ func TestStartCompletionDoesNotUploadHistoryContextFile(t *testing.T) {
 	ds := &fakeDeepSeekCaller{responses: []*http.Response{sseHTTPResponse(http.StatusOK, `data: {"p":"response/content","v":"ok"}`)}}
 	stdReq := promptcompat.StandardRequest{
 		Surface:         "test_adapter",
-		RequestedModel:  "deepseek-v4-flash",
-		ResolvedModel:   "deepseek-v4-flash",
-		ResponseModel:   "deepseek-v4-flash",
+		RequestedModel:  "gpt-oss-120b",
+		ResolvedModel:   "gpt-oss-120b",
+		ResponseModel:   "gpt-oss-120b",
 		PromptTokenText: "first user turn",
 		FinalPrompt:     "first user turn",
 		Messages: []any{
@@ -181,9 +181,9 @@ func TestStartCompletionReuploadsPrivateContextAfterAccountSwitch(t *testing.T) 
 	}
 	stdReq := promptcompat.StandardRequest{
 		Surface:                 "openai_chat",
-		RequestedModel:          "deepseek-v4-flash",
-		ResolvedModel:           "deepseek-v4-flash",
-		ResponseModel:           "deepseek-v4-flash",
+		RequestedModel:          "gpt-oss-120b",
+		ResolvedModel:           "gpt-oss-120b",
+		ResponseModel:           "gpt-oss-120b",
 		PromptTokenText:         "history\nlatest",
 		FinalPrompt:             "latest",
 		RefFileIDs:              []string{"file-old", "file-user"},
