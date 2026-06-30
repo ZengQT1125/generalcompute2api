@@ -3,6 +3,8 @@ package toolstream
 import (
 	"strings"
 	"testing"
+
+	"generalcompute2api/internal/toolcall"
 )
 
 func TestProcessToolSieveInterceptsXMLToolCallWithoutLeak(t *testing.T) {
@@ -975,8 +977,8 @@ func TestOpeningXMLTagNotLeakedAsContent(t *testing.T) {
 
 func TestProcessToolSieveFallsBackToRawAttemptCompletion(t *testing.T) {
 	var state State
-	// Simulate an agent outputting attempt_completion XML tag.
-	// If it does not parse as a tool call, it should fall back to raw text.
+	// When attempt_completion is in the tool list, bare XML should be parsed
+	// as a tool call via findBareToolNameTagStart.
 	chunks := []string{
 		"Done with task.\n",
 		"<attempt_completion>\n",
@@ -990,9 +992,13 @@ func TestProcessToolSieveFallsBackToRawAttemptCompletion(t *testing.T) {
 	events = append(events, Flush(&state, []string{"attempt_completion"})...)
 
 	var textContent string
+	var toolCalls []toolcall.ParsedToolCall
 	for _, evt := range events {
 		if evt.Content != "" {
 			textContent += evt.Content
+		}
+		if len(evt.ToolCalls) > 0 {
+			toolCalls = append(toolCalls, evt.ToolCalls...)
 		}
 	}
 
@@ -1000,8 +1006,18 @@ func TestProcessToolSieveFallsBackToRawAttemptCompletion(t *testing.T) {
 		t.Fatalf("expected leading text to be emitted, got %q", textContent)
 	}
 
-	if textContent != strings.Join(chunks, "") {
-		t.Fatalf("expected agent XML to fall back to raw text, got %q", textContent)
+	if len(toolCalls) != 1 {
+		t.Fatalf("expected 1 tool call, got %d", len(toolCalls))
+	}
+	if toolCalls[0].Name != "attempt_completion" {
+		t.Fatalf("expected tool name attempt_completion, got %q", toolCalls[0].Name)
+	}
+	result, ok := toolCalls[0].Input["result"]
+	if !ok {
+		t.Fatalf("expected result parameter, got %v", toolCalls[0].Input)
+	}
+	if result != "Here is the answer" {
+		t.Fatalf("expected result value 'Here is the answer', got %q", result)
 	}
 }
 

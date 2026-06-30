@@ -74,7 +74,7 @@ func ProcessChunk(state *State, chunk string, toolNames []string) []Event {
 			continue
 		}
 
-		safe, hold := splitSafeContentForToolDetection(state, pending)
+		safe, hold := splitSafeContentForToolDetection(state, pending, toolNames)
 		if safe == "" {
 			break
 		}
@@ -156,7 +156,7 @@ func Flush(state *State, toolNames []string) []Event {
 	return events
 }
 
-func splitSafeContentForToolDetection(state *State, s string) (safe, hold string) {
+func splitSafeContentForToolDetection(state *State, s string, toolNames []string) (safe, hold string) {
 	if s == "" {
 		return "", ""
 	}
@@ -187,6 +187,16 @@ func splitSafeContentForToolDetection(state *State, s string) (safe, hold string
 		}
 		return "", s
 	}
+	// 检查是否有未完的裸工具名标签
+	if holdStart := findPartialBareToolNameTagStart(s, toolNames); holdStart >= 0 {
+		if insideCodeFenceWithState(state, s[:holdStart]) {
+			return s, ""
+		}
+		if holdStart > 0 {
+			return s[:holdStart], s[holdStart:]
+		}
+		return "", s
+	}
 	return s, ""
 }
 
@@ -204,7 +214,7 @@ func findToolSegmentStart(state *State, s string, toolNames []string) int {
 	for {
 		tag, ok := toolcall.FindToolMarkupTagOutsideIgnored(s, offset)
 		if !ok {
-			return -1
+			break
 		}
 		start := includeDuplicateLeadingLessThan(s, tag.Start)
 		if !insideCodeFenceWithState(state, s[:start]) {
@@ -212,6 +222,63 @@ func findToolSegmentStart(state *State, s string, toolNames []string) int {
 		}
 		offset = tag.End + 1
 	}
+	// 尝试裸工具名 XML 标签（例如 <read_file><path>...</path></read_file>）
+	if start := findBareToolNameTagStart(state, s, toolNames); start >= 0 {
+		return start
+	}
+	return -1
+}
+
+
+// findPartialBareToolNameTagStart 检查文本末尾是否有未完的裸工具名标签（如 <read_file 缺少 >）。
+func findPartialBareToolNameTagStart(s string, toolNames []string) int {
+	if len(toolNames) == 0 || s == "" {
+		return -1
+	}
+	lastLT := strings.LastIndex(s, "<")
+	if lastLT < 0 {
+		return -1
+	}
+	start := includeDuplicateLeadingLessThan(s, lastLT)
+	tail := s[start:]
+	// 如果已经有 >，说明标签完整，不是 partial
+	if strings.Contains(tail, ">") {
+		return -1
+	}
+	if len(tail) <= 1 {
+		return -1
+	}
+	// 跳过 /
+	i := 1
+	if i < len(tail) && tail[i] == '/' {
+		return -1  // 闭合标签
+	}
+	// 提取标签名
+	nameStart := i
+	nameEnd := nameStart
+	for nameEnd < len(tail) {
+		ch := tail[nameEnd]
+		if ch == '>' || ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '/' {
+			break
+		}
+		nameEnd++
+	}
+	if nameEnd <= nameStart {
+		return -1
+	}
+	// 部分标签名应至少匹配某个工具名的前缀
+	partialName := tail[nameStart:nameEnd]
+	for _, name := range toolNames {
+		if name == "" || name == "__any_tool__" {
+			continue
+		}
+		// 检查是否为前缀匹配
+		if strings.HasPrefix(strings.ToLower(name), strings.ToLower(partialName)) ||
+			strings.HasPrefix(strings.ToLower(partialName), strings.ToLower(name)) {
+			return start
+		}
+	}
+	return -1
 }
 
 func findMinimaxToolCallStart(state *State, s string) int {
