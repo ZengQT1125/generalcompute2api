@@ -11,24 +11,18 @@ RUN set -eux; \
     GOARCH="${TARGETARCH:-$(go env GOARCH)}"; \
     BUILD_VERSION_RESOLVED="${BUILD_VERSION:-}"; \
     if [ -z "${BUILD_VERSION_RESOLVED}" ] && [ -f VERSION ]; then BUILD_VERSION_RESOLVED="$(cat VERSION | tr -d "[:space:]")"; fi; \
-    CGO_ENABLED=0 GOOS="${GOOS}" GOARCH="${GOARCH}" go build -buildvcs=false -ldflags="-s -w -X generalcompute2api/internal/version.BuildVersion=${BUILD_VERSION_RESOLVED}" -o /out/generalcompute2api ./cmd/generalcompute2api
+    CGO_ENABLED=0 GOOS="${GOOS}" GOARCH="${GOARCH}" go build -buildvcs=false -ldflags="-s -w -X generalcompute2api/internal/version.BuildVersion=${BUILD_VERSION_RESOLVED}" -o /out/generalcompute2api ./cmd/generalcompute2api; \
+    mkdir -p /out/app/data /out/data
 
-FROM busybox:1.36.1-musl AS busybox-tools
-
-FROM debian:bookworm-slim AS runtime-base
+FROM alpine:3.20 AS runtime-base
 WORKDIR /app
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates \
-    && groupadd -r generalcompute2api && useradd -r -g generalcompute2api -d /app -s /usr/sbin/nologin generalcompute2api \
-    && mkdir -p /app/data /data && chown -R generalcompute2api:generalcompute2api /app /data \
-    && rm -rf /var/lib/apt/lists/*
-COPY --from=busybox-tools /bin/busybox /usr/local/bin/busybox
+# Alpine natively includes ca-certificates and busybox. 
 EXPOSE 8000
 CMD ["/usr/local/bin/generalcompute2api"]
 
 FROM runtime-base AS runtime-from-source
 COPY --from=go-builder /out/generalcompute2api /usr/local/bin/generalcompute2api
-
-# USER generalcompute2api # Commented out to run as root and avoid SQLite permission issues on host-mounted volumes
+COPY --from=go-builder /out/app/data /app/data
+COPY --from=go-builder /out/data /data
 
 FROM runtime-from-source AS final

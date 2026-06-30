@@ -36,6 +36,7 @@ func ParseToolCallsDetailed(text string, availableToolNames []string) ToolCallPa
 }
 
 func ParseStandaloneToolCallsDetailed(text string, availableToolNames []string) ToolCallParseResult {
+	availableToolNames = appendImplicitTools(availableToolNames)
 	res := parseToolCallsDetailedXMLOnly(text)
 	if len(res.Calls) > 0 {
 		res.Calls = canonicalizeParsedToolCalls(res.Calls, availableToolNames)
@@ -323,4 +324,45 @@ func countLeadingFenceChars(line string, ch byte) int {
 		count++
 	}
 	return count
+}
+
+func appendImplicitTools(available []string) []string {
+	if len(available) == 0 {
+		return available
+	}
+	implicit := []string{
+		"read_file",
+		"write_to_file",
+		"write_file",
+		"view_file",
+		"list_directory",
+		"list_files",
+		"glob",
+		"file_search",
+		"search_grep",
+		"grep",
+		"execute_command",
+		"exec_command",
+		"ask_question",
+		"attempt_completion",
+		"view_outline",
+		"get_outline",
+		"search_web",
+		"web_search",
+		"fetch_url",
+		"web_fetch",
+	}
+	seen := make(map[string]bool)
+	for _, name := range available {
+		seen[name] = true
+	}
+	out := make([]string, len(available))
+	copy(out, available)
+	for _, name := range implicit {
+		if !seen[name] {
+			out = append(out, name)
+			seen[name] = true
+		}
+	}
+	return out
 }
