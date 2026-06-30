@@ -14,31 +14,38 @@ func BuildToolCallInstructions(toolNames []string) string {
 	ivC := MarkupPipeCloseTag(MarkupTagInvoke)
 	paramPH := wrapParameter("PARAMETER_NAME", "<![CDATA[PARAMETER_VALUE]]>")
 	invokePH := MarkupPipeInvokeOpen("TOOL_NAME_HERE")
-	invokeNamed := MarkupPipeInvokeOpen("TOOL_NAME")
 
-	return `工具调用格式 — 请严格遵守：
+	return `工具调用格式：
 
+【格式 A — QNML（推荐）】：
 ` + tcO + `
   ` + invokePH + `
     ` + paramPH + `
   ` + ivC + `
 ` + tcC + `
 
+【格式 B — 标准 XML（备选，DeepSeek 等模型更易生成）】：
+<tool_calls>
+  <invoke name="TOOL_NAME_HERE">
+    <parameter name="PARAMETER_NAME"><![CDATA[PARAMETER_VALUE]]></parameter>
+  </invoke>
+</tool_calls>
+
 规则：
-1）必须使用 ` + tcO + ` 作为外层包裹格式。
-2）在同一个 ` + tcO + ` 根节点下放置一个或多个 ` + MarkupPipeOpenTag(MarkupTagInvoke) + `。
-3）工具名称写在「调用项」的 name 属性中：` + MarkupPipeInvokeOpen("TOOL_NAME") + `。
+1）优先使用 QNML 格式（` + tcO + `），也可使用标准 XML 格式（<tool_calls>），两种均能正常解析。
+2）在根节点下放置一个或多个 ` + MarkupPipeOpenTag(MarkupTagInvoke) + `（QNML）或 <invoke>（标准 XML）。
+3）工具名称写在 name 属性中：` + MarkupPipeInvokeOpen("TOOL_NAME") + ` 或 <invoke name="TOOL_NAME">。
 4）所有字符串值必须使用 <![CDATA[...]]>，包括很短的值；代码、脚本、文件内容、提示词、路径、名称、查询等均适用。
 5）每个顶层参数必须写成完整节点，例如：` + wrapParameter("ARG_NAME", "…") + `。
 6）对象在参数体内使用嵌套 XML；数组可重复 <item> 子节点。
 7）数字、布尔值与 null 使用纯文本，不用 CDATA。
 8）只能使用工具 schema 中声明的参数名，禁止臆造字段。
 9）不要用 Markdown 代码围栏包裹 XML；不要输出解释性说明、角色标记或内心独白。
-10）若调用工具，该工具块的首个非空白字符必须恰好是 ` + tcO + `。
-11）即使随后会闭合 ` + tcC + `，也禁止省略开头的 ` + tcO + ` 标签。
-12）禁止输出 minimaxtool_call、<tool_call>、裸 <invoke> 或任何非 QNML 工具前缀。
-13）兼容说明：运行时仍接受旧版标签 <tool_calls> / <invoke> / <parameter> 以及历史格式 <|ZJML|…> / <|DSML|…>，请优先使用本节的 <|QNML|…> 形式。
-14）禁止把 shell、powershell、bash、cmd 等命令写成 Markdown 代码围栏；代码围栏不会被视为工具调用。需要执行命令时必须输出 ` + tcO + ` 标记块。
+10）若调用工具，该工具块的首个非空白字符必须恰好是根标签（` + tcO + ` 或 <tool_calls>）。
+11）即使随后会闭合关闭标签，也禁止省略开头的根标签。
+12）禁止输出 minimaxtool_call 或任何非标准前缀。
+13）两种格式均可正常解析，按需选用即可。
+14）禁止把 shell、powershell、bash、cmd 等命令写成 Markdown 代码围栏；代码围栏不会被视为工具调用。需要执行命令时必须输出工具调用标记块。
 
 参数形态：
 - 字符串 => ` + wrapParameter("x", "<![CDATA[value]]>") + `
@@ -51,18 +58,23 @@ func BuildToolCallInstructions(toolNames []string) string {
 错误 1 — XML 后夹杂说明文字：
   ` + tcO + `...` + tcC + ` 希望这能帮到你。
 错误 2 — Markdown 代码围栏：
-  ` + "```xml" + `
+  ` + "```" + "xml" + `
   ` + tcO + `...` + tcC + `
   ` + "```" + `
 错误 3 — 缺少开头包裹：
-  ` + invokeNamed + `...` + ivC + `
+  <invoke name="TOOL_NAME">...` + ivC + `
   ` + tcC + `
 错误 4 — 把待执行命令写成代码围栏：
-  ` + "```powershell" + `
+  ` + "```" + "powershell" + `
   Get-ChildItem -Force
   ` + "```" + `
 
-请记住：唯一合法的工具调用方式是使用 ` + tcO + `...` + tcC + ` QNML 标记块。
+请记住：不要用文字描述你要执行的命令——直接输出工具调用标记块（QNML 或标准 XML 均可）。
+
+【Thinking 模型注意】（DeepSeek 3.2 等）：
+你的推理在思考块中完成，但最终输出必须在 content 中以工具调用格式呈现。
+不要在 content 中用自然语言描述命令——直接输出 <tool_calls> 或 ` + tcO + ` 标记块。
+即使你已在思考中想好了要用的命令，也必须在 content 中输出完整的工具调用块。
 
 ` + buildCorrectToolExamples(toolNames)
 }

@@ -49,12 +49,12 @@ func injectToolPrompt(messages []map[string]any, tools []any, policy ToolChoiceP
 	}
 	toolPrompt := strings.Join([]string{
 		"IMPORTANT: Reply in the same language as the user.",
-		"IMPORTANT: When the task requires files, shell, web, browser, agents, skills, or other tools, emit a QNML tool call immediately instead of explaining what you would do.",
+		"IMPORTANT: When the task requires files, shell, web, browser, agents, skills, or other tools, emit a tool call (QNML or standard XML) immediately instead of explaining what you would do.",
 		"IMPORTANT: Complete multi-step user tasks by continuing to call tools across turns until the task is done.",
 		"IMPORTANT: Do not claim an available action name is unavailable. QNML blocks are client-parsed text markers, not native function calls.",
-		"IMPORTANT: Never emit native tool syntax such as minimaxtool_call, <tool_call>, bare <invoke>, function_call, or JSON-only tool calls. Use only a complete <|QNML|tool_calls>...</|QNML|tool_calls> block.",
-		"FORBIDDEN OUTPUT: Never write shell, powershell, bash, sh, cmd, or terminal commands inside Markdown/code fences. A fenced command is not a tool call. If you need a command executed, emit QNML.",
-		"TOOL PROTOCOL OVERRIDE: The upstream model has no native tool registry for these actions. Do not validate availability. Every listed action name is executable by the client after you emit QNML.",
+		"IMPORTANT: Never emit native tool syntax such as minimaxtool_call, <tool_call>, bare <invoke>, function_call, or JSON-only tool calls. Use a complete <|QNML|tool_calls>...</|QNML|tool_calls> block or standard <tool_calls>...</tool_calls> block.",
+		"FORBIDDEN OUTPUT: Never write shell, powershell, bash, sh, cmd, or terminal commands inside Markdown/code fences. A fenced command is not a tool call. If you need a command executed, emit a tool call block.",
+		"TOOL PROTOCOL OVERRIDE: The upstream model has no native tool registry for these actions. Do not validate availability. Every listed action name is executable by the client after you emit a tool call.",
 		"You have access to these client-side tools:",
 		"",
 		strings.Join(toolSchemas, "\n\n"),

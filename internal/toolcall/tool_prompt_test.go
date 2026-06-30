@@ -111,7 +111,7 @@ func TestBuildToolCallInstructions_WriteUsesFilePathAndContent(t *testing.T) {
 
 func TestBuildToolCallInstructions_AnchorsMissingOpeningWrapperFailureMode(t *testing.T) {
 	out := BuildToolCallInstructions([]string{"read_file"})
-	if !strings.Contains(out, "禁止省略开头的 <|QNML|tool_calls> 标签") {
+	if !strings.Contains(out, "禁止省略开头的根标签") {
 		t.Fatalf("expected explicit missing-opening-tag warning, got: %s", out)
 	}
 	if !strings.Contains(out, "错误 3 — 缺少开头包裹") {

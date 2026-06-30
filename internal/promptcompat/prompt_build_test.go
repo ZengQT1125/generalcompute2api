@@ -74,7 +74,7 @@ func TestBuildOpenAIFinalPrompt_KeepsFinalAnswerInstruction(t *testing.T) {
 	}
 
 	finalPrompt, _ := buildOpenAIFinalPrompt(messages, tools, "", false)
-	if !strings.Contains(finalPrompt, "请记住：唯一合法的工具调用方式是使用 <|QNML|tool_calls>...</|QNML|tool_calls> QNML 标记块。") {
+	if !strings.Contains(finalPrompt, "请记住：不要用文字描述你要执行的命令——直接输出工具调用标记块（QNML 或标准 XML 均可）。") {
 		t.Fatalf("finalPrompt missing final tool-call anchor instruction: %q", finalPrompt)
 	}
 	if !strings.Contains(finalPrompt, "工具调用格式") {
