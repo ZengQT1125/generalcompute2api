@@ -60,7 +60,7 @@ func ProcessChunk(state *State, chunk string, toolNames []string) []Event {
 		if pending == "" {
 			break
 		}
-		start := findToolSegmentStart(state, pending)
+		start := findToolSegmentStart(state, pending, toolNames)
 		if start >= 0 {
 			prefix := pending[:start]
 			if prefix != "" {
@@ -190,7 +190,7 @@ func splitSafeContentForToolDetection(state *State, s string) (safe, hold string
 	return s, ""
 }
 
-func findToolSegmentStart(state *State, s string) int {
+func findToolSegmentStart(state *State, s string, toolNames []string) int {
 	if s == "" {
 		return -1
 	}
@@ -367,9 +367,14 @@ func consumeToolCapture(state *State, toolNames []string) (prefix string, calls 
 	if shouldKeepBareInvokeCapture(captured) {
 		return "", nil, "", false
 	}
+	// 裸工具名标签尚未闭合时继续缓存
+	if open, _ := findBareToolNameBoundary(captured, toolNames); open {
+		return "", nil, "", false
+	}
 	if hasMalformedExecutableToolMarker(captured) {
 		return "", nil, "", false
 	}
+
 	return captured, nil, "", true
 }
 
@@ -413,4 +418,136 @@ func isMatchingFenceClose(line, marker string) bool {
 		count++
 	}
 	return count >= len(marker) && strings.TrimSpace(line[count:]) == ""
+}
+
+
+// findBareToolNameTagStart 扫描文本中直接以工具名为 XML 标签的起始位置。
+// 例如 <read_file><path>...</path></read_file> 中的 <read_file>。
+func findBareToolNameTagStart(state *State, s string, toolNames []string) int {
+	if len(toolNames) == 0 || s == "" {
+		return -1
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] != '<' || i+1 >= len(s) || s[i+1] == '/' || s[i+1] == '?' {
+			continue
+		}
+		// 跳过代码围栏内部
+		if insideCodeFenceWithState(state, s[:i]) {
+			continue
+		}
+		// 提取标签名
+		nameStart := i + 1
+		nameEnd := nameStart
+		for nameEnd < len(s) {
+			ch := s[nameEnd]
+			if ch == '>' || ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '/' {
+				break
+			}
+			nameEnd++
+		}
+		if nameEnd <= nameStart {
+			continue
+		}
+		tagName := s[nameStart:nameEnd]
+		if tagName == "" {
+			continue
+		}
+		// 确认标签名匹配某个可用工具
+		if !matchesAnyToolName(tagName, toolNames) {
+			continue
+		}
+		// 确认有 >（是完整开始标签，不只是裸露的 <）
+		if strings.IndexByte(s[nameEnd:], '>') < 0 {
+			continue
+		}
+		return i
+	}
+	return -1
+}
+
+// matchesAnyToolName 检查标签名是否匹配可用工具名列表中的某个（含大小写不敏感、Qwen 别名等）。
+func matchesAnyToolName(tagName string, toolNames []string) bool {
+	if tagName == "" || len(toolNames) == 0 {
+		return false
+	}
+	lower := strings.ToLower(strings.TrimSpace(tagName))
+	for _, name := range toolNames {
+		if name == "" || name == "__any_tool__" {
+			continue
+		}
+		// 1) 直接大小写不敏感匹配
+		if strings.EqualFold(tagName, name) {
+			return true
+		}
+		// 2) Qwen 别名（例如 Bash → shell_run）
+		if strings.EqualFold(tagName, toolcall.ToQwenToolName(name)) {
+			return true
+		}
+		// 3) 规范名反向解析（例如 shell_run → Bash）
+		if strings.EqualFold(tagName, toolcall.FromQwenToolName(name)) {
+			return true
+		}
+		// 4) u_ 前缀形式（ToQwenToolName 对未知名加 u_ 前缀）
+		if len(name) > 0 && "u_"+strings.ToLower(name) == lower {
+			return true
+		}
+	}
+	return false
+}
+
+// findBareToolNameBoundary 检查捕获文本中是否有裸工具名标签的开放/封闭配对。
+// 返回 (有开放未闭合标签, 有完整配对)。
+func findBareToolNameBoundary(captured string, toolNames []string) (hasOpen bool, hasComplete bool) {
+	if captured == "" || len(toolNames) == 0 {
+		return false, false
+	}
+	// 从所有已知工具名中找出所有可能出现的裸标签
+	tagSet := make(map[string]bool)
+	for _, name := range toolNames {
+		if name == "" || name == "__any_tool__" {
+			continue
+		}
+		tagSet[name] = true
+		alias := toolcall.ToQwenToolName(name)
+		if alias != name {
+			tagSet[alias] = true
+		}
+		canonical := toolcall.FromQwenToolName(name)
+		if canonical != name && canonical != "" {
+			tagSet[canonical] = true
+		}
+	}
+	lower := strings.ToLower(captured)
+	for tag := range tagSet {
+		tagLower := strings.ToLower(tag)
+		openTag := "<" + tagLower + ">"
+		closeTag := "</" + tagLower + ">"
+
+		openCount := countOccurrences(lower, openTag)
+		closeCount := countOccurrences(lower, closeTag)
+		if openCount > closeCount {
+			hasOpen = true
+		}
+		if openCount > 0 && openCount == closeCount {
+			hasComplete = true
+		}
+	}
+	return
+}
+
+// countOccurrences 返回 substr 在 s 中不重叠的出现次数。
+func countOccurrences(s, substr string) int {
+	if s == "" || substr == "" {
+		return 0
+	}
+	count := 0
+	for i := 0; i <= len(s)-len(substr); {
+		if s[i:i+len(substr)] == substr {
+			count++
+			i += len(substr)
+		} else {
+			i++
+		}
+	}
+	return count
 }

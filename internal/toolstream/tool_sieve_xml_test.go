@@ -812,7 +812,7 @@ func TestFindToolSegmentStartDetectsXMLToolCalls(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := findToolSegmentStart(nil, tc.input)
+			got := findToolSegmentStart(nil, tc.input, nil)
 			if got != tc.want {
 				t.Fatalf("findToolSegmentStart(%q) = %d, want %d", tc.input, got, tc.want)
 			}

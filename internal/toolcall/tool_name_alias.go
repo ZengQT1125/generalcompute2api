@@ -100,3 +100,8 @@ func canonicalToolName(name string, availableToolNames []string) string {
 func toolNameKey(name string) string {
 	return regexp.MustCompile(`[^a-z0-9]+`).ReplaceAllString(strings.ToLower(strings.TrimSpace(name)), "")
 }
+
+// ToolNameKey returns a normalized key for tool name matching (exported version).
+func ToolNameKey(name string) string {
+	return toolNameKey(name)
+}

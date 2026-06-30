@@ -38,6 +38,11 @@ func parseMultiFormatToolCalls(text string, availableToolNames []string) ([]Pars
 		return calls, true
 	}
 
+	// 5.5 尝试裸工具名 XML 格式
+	if calls, ok := parseBareToolNameXMLCalls(trimmed, availableToolNames); ok && len(calls) > 0 {
+		return calls, true
+	}
+
 	// 6. 尝试解析 TextKV 键值对格式
 	if calls, ok := parseTextKVToolCalls(trimmed, availableToolNames); ok && len(calls) > 0 {
 		return calls, true
@@ -459,4 +464,251 @@ func parseTextKVToolCalls(text string, availableToolNames []string) ([]ParsedToo
 		Name:  name,
 		Input: args,
 	}}, true
+}
+
+
+// parseBareToolNameXMLCalls 处理模型直接以工具名为 XML 标签名输出的格式：
+//
+//	<read_file>
+//	  <path>G:\xxx</path>
+//	</read_file>
+//
+// 每个顶层工具标签的直系子标签作为参数名/值处理。
+func parseBareToolNameXMLCalls(text string, availableToolNames []string) ([]ParsedToolCall, bool) {
+	if len(availableToolNames) == 0 {
+		return nil, false
+	}
+	// 对每个可用工具名，生成可能被模型用作 XML 标签的变体
+	tagCandidates := make([]string, 0, len(availableToolNames)*3)
+	for _, name := range availableToolNames {
+		if name == "" || name == "__any_tool__" {
+			continue
+		}
+		tagCandidates = append(tagCandidates, name)
+		// 也尝试 Qwen 别名
+		if alias := ToQwenToolName(name); alias != name {
+			tagCandidates = append(tagCandidates, alias)
+		}
+		// 也尝试反向解析后的规范名
+		if canonical := FromQwenToolName(name); canonical != name && canonical != "" {
+			tagCandidates = append(tagCandidates, canonical)
+		}
+	}
+	tagCandidates = uniqueStrings(tagCandidates)
+
+	type foundBlock struct {
+		tag  string
+		body string
+	}
+	var blocks []foundBlock
+
+	for _, tag := range tagCandidates {
+		for _, block := range findXMLElementBlocks(text, tag) {
+			blocks = append(blocks, foundBlock{tag: tag, body: block.Body})
+		}
+	}
+	if len(blocks) == 0 {
+		return nil, false
+	}
+
+	out := make([]ParsedToolCall, 0, len(blocks))
+	for _, block := range blocks {
+		name := block.tag
+		// 校验工具名是否在允许列表中
+		name = allowedToolName(name, availableToolNames)
+		if name == "" {
+			continue
+		}
+
+		input := parseBareXMLChildrenAsParams(block.body)
+		if input == nil {
+			input = map[string]any{}
+		}
+		// 如果 body 本身就是合法的 JSON，尝试直接解析
+		if strings.TrimSpace(block.body) != "" && len(input) == 0 {
+			if parsed := parseJSONArguments(block.body); len(parsed) > 0 {
+				if content, ok := parsed["content"]; ok && len(parsed) == 1 {
+					// 单个 content 字段说明不是标准 JSON 对象，保留为空
+					_ = content
+				} else {
+					input = parsed
+				}
+			}
+		}
+		out = append(out, ParsedToolCall{Name: name, Input: input})
+	}
+	return out, len(out) > 0
+}
+
+// parseBareXMLChildrenAsParams 提取 <toolName><param1>val1</param1><param2>val2</param2></toolName> 中的子节点作为参数
+func parseBareXMLChildrenAsParams(body string) map[string]any {
+	trimmed := strings.TrimSpace(body)
+	if trimmed == "" {
+		return map[string]any{}
+	}
+
+	out := map[string]any{}
+	// 使用已有的 findXMLElementBlocks 提取直系子标签
+	// 注意：XML 解码器可能把嵌套结构展平，我们先处理一级子标签
+	for {
+		tag, ok := findFirstXMLTag(trimmed)
+		if !ok {
+			break
+		}
+		block := findXMLBlockByTag(trimmed, tag)
+		if block == "" {
+			break
+		}
+		// 提取标签内的文本内容
+		inner := extractXMLBlockBody(block)
+		trimmed = removeFirstXMLBlock(trimmed)
+		if inner == "" {
+			continue
+		}
+		// 处理 CDATA
+		if cdataValue, ok := extractStandaloneCDATA(inner); ok {
+			out[tag] = cdataValue
+		} else {
+			out[tag] = inner
+		}
+	}
+	return out
+}
+
+// findFirstXMLTag 找到文本中第一个 XML 开始标签名
+func findFirstXMLTag(text string) (string, bool) {
+	lower := strings.ToLower(text)
+	for i := 0; i < len(text); i++ {
+		if text[i] != '<' {
+			continue
+		}
+		if i+1 < len(text) && text[i+1] == '/' {
+			continue // 跳过闭合标签
+		}
+		start := i + 1
+		end := start
+		for end < len(text) && text[end] != '>' && text[end] != ' ' && text[end] != '/' && text[end] != '\t' && text[end] != '\n' && text[end] != '\r' {
+			end++
+		}
+		if end > start && end < len(text) && text[end] == '>' {
+			_ = lower
+			return text[start:end], true
+		}
+		// 有属性的标签
+		if end > start {
+			return text[start:end], true
+		}
+	}
+	return "", false
+}
+
+// findXMLBlockByTag 提取第一个匹配指定标签名的完整 XML 块（包含子标签）
+func findXMLBlockByTag(text, tag string) string {
+	lower := strings.ToLower(text)
+	targetStart := "<" + strings.ToLower(tag)
+	closeTag := "</" + strings.ToLower(tag) + ">"
+
+	startIdx := strings.Index(lower, targetStart)
+	if startIdx < 0 {
+		return ""
+	}
+	// 找到结束 >
+	gtIdx := strings.Index(text[startIdx:], ">")
+	if gtIdx < 0 {
+		return ""
+	}
+	bodyStart := startIdx + gtIdx + 1
+
+	// 查找匹配的闭合标签，考虑嵌套
+	depth := 1
+	searchFrom := bodyStart
+	for depth > 0 && searchFrom < len(text) {
+		nextOpen := strings.Index(strings.ToLower(text[searchFrom:]), targetStart)
+		nextClose := strings.Index(strings.ToLower(text[searchFrom:]), closeTag)
+
+		if nextClose < 0 {
+			return "" // 没有闭合标签
+		}
+		if nextOpen >= 0 && nextOpen < nextClose {
+			depth++
+			searchFrom += nextOpen + len(targetStart)
+		} else {
+			depth--
+			if depth == 0 {
+				blockEnd := searchFrom + nextClose + len(closeTag)
+				return text[startIdx:blockEnd]
+			}
+			searchFrom += nextClose + len(closeTag)
+		}
+	}
+	return ""
+}
+
+// extractXMLBlockBody 从 <tag>body</tag> 中提取 body 部分
+func extractXMLBlockBody(block string) string {
+	gtIdx := strings.Index(block, ">")
+	if gtIdx < 0 {
+		return ""
+	}
+	closeTag := "</"
+	closeIdx := strings.LastIndex(block, closeTag)
+	if closeIdx < 0 || closeIdx <= gtIdx+1 {
+		return ""
+	}
+	return block[gtIdx+1 : closeIdx]
+}
+
+// removeFirstXMLBlock 移除文本中第一个 XML 块
+func removeFirstXMLBlock(text string) string {
+	// 找第一个 <tag> 
+	start := strings.Index(text, "<")
+	if start < 0 {
+		return ""
+	}
+	// 如果是闭合标签跳过
+	if start+1 < len(text) && text[start+1] == '/' {
+		nextStart := strings.Index(text[start+1:], "<")
+		if nextStart >= 0 {
+			return removeFirstXMLBlock(text[start+1+nextStart:])
+		}
+		return ""
+	}
+	// 找闭合标签
+	gtIdx := strings.Index(text[start:], ">")
+	if gtIdx < 0 {
+		return ""
+	}
+	// 检查是否有属性
+	tagEnd := start + gtIdx
+	tagNameStart := start + 1
+	tagNameEnd := tagNameStart
+	for tagNameEnd < tagEnd && text[tagNameEnd] != ' ' && text[tagNameEnd] != '/' && text[tagNameEnd] != '\t' && text[tagNameEnd] != '\n' && text[tagNameEnd] != '\r' {
+		tagNameEnd++
+	}
+	tagName := text[tagNameStart:tagNameEnd]
+	closeTag := "</" + tagName + ">"
+	lower := strings.ToLower(text)
+	lowerClose := strings.ToLower(closeTag)
+	closeIdx := strings.Index(lower[start:], lowerClose)
+	if closeIdx < 0 {
+		return ""
+	}
+	blockEnd := start + closeIdx + len(closeTag)
+	if blockEnd >= len(text) {
+		return ""
+	}
+	return text[blockEnd:]
+}
+
+// uniqueStrings 去重字符串切片
+func uniqueStrings(s []string) []string {
+	seen := make(map[string]struct{}, len(s))
+	out := make([]string, 0, len(s))
+	for _, v := range s {
+		if _, ok := seen[v]; !ok {
+			seen[v] = struct{}{}
+			out = append(out, v)
+		}
+	}
+	return out
 }
