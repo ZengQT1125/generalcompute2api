@@ -9,6 +9,15 @@ func TestResolveModelDirectGLModel(t *testing.T) {
 	}
 }
 
+func TestResolveModelNewGLModels(t *testing.T) {
+	for _, model := range []string{"gpt-oss-120b", "gemma-4-31B-it"} {
+		got, ok := ResolveModel(model)
+		if !ok || got != model {
+			t.Fatalf("expected %q, got ok=%v model=%q", model, ok, got)
+		}
+	}
+}
+
 func TestResolveModelMinimaxWebAliases(t *testing.T) {
 	for _, requested := range []string{"minimax2.7", "minimax-2.7", "minimax-m2-7"} {
 		got, ok := ResolveModel(requested)
@@ -36,6 +45,13 @@ func TestOpenAIModelByIDPreservesGLModelID(t *testing.T) {
 	info, ok := OpenAIModelByID("deepseek-v3.2")
 	if !ok || info.ID != "deepseek-v3.2" {
 		t.Fatalf("expected advertised deepseek-v3.2, got ok=%v id=%q", ok, info.ID)
+	}
+}
+
+func TestOpenAIModelByIDMatchesCaseInsensitively(t *testing.T) {
+	info, ok := OpenAIModelByID("gemma-4-31b-it")
+	if !ok || info.ID != "gemma-4-31B-it" {
+		t.Fatalf("expected advertised gemma-4-31B-it, got ok=%v id=%q", ok, info.ID)
 	}
 }
 

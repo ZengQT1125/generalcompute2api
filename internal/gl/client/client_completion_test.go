@@ -128,6 +128,54 @@ func TestCallCompletionKeepsMinimaxModelForUpstream(t *testing.T) {
 	}
 }
 
+func TestCallCompletionKeepsNewModelsForUpstream(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		model         string
+		wantCanonical string
+		wantUpstream  string
+	}{
+		{name: "gpt oss", model: "gpt-oss-120b", wantCanonical: "gpt-oss-120b", wantUpstream: "gpt-oss-120b"},
+		{name: "gemma", model: "gemma-4-31B-it", wantCanonical: "gemma-4-31B-it", wantUpstream: "gemma-4-31B-it"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resolver := newGLTestResolver([]config.Account{
+				{Email: "good@example.com", Token: "good-token"},
+			})
+			a := newManagedAuth(t, resolver)
+			defer resolver.Release(a)
+
+			var upstreamModel string
+			c := &Client{
+				Auth: resolver,
+				HttpClient: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+					var payload map[string]any
+					if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+						t.Fatalf("decode payload failed: %v", err)
+					}
+					upstreamModel, _ = payload["model"].(string)
+					return textResponse(http.StatusOK, "data: [DONE]\n\n"), nil
+				})},
+				maxRetries: 1,
+			}
+
+			payload := validGLPayload()
+			payload["model"] = tc.model
+			resp, err := c.CallCompletion(context.Background(), a, payload, "", 1)
+			if err != nil {
+				t.Fatalf("call completion failed: %v", err)
+			}
+			defer resp.Body.Close()
+			if upstreamModel != tc.wantUpstream {
+				t.Fatalf("expected upstream %q, got %q", tc.wantUpstream, upstreamModel)
+			}
+			if payload["model"] != tc.wantCanonical {
+				t.Fatalf("expected canonical payload model %q, got %q", tc.wantCanonical, payload["model"])
+			}
+		})
+	}
+}
+
 func TestCallCompletionReturnsFinal5xxWhenNoFallbackAccount(t *testing.T) {
 	resolver := newGLTestResolver([]config.Account{
 		{Email: "bad@example.com", Token: "bad-token"},

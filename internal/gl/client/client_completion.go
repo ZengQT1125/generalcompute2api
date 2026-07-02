@@ -31,7 +31,7 @@ func (c *Client) CallCompletion(ctx context.Context, a *auth.RequestAuth, payloa
 	requestedModel := model
 	model, upstreamModel, ok := normalizeGLModel(model)
 	if !ok {
-		return nil, fmt.Errorf("unsupported model %q; only deepseek-v3.2, deepseek-v3.1, and minimax-m2.7 are supported", requestedModel)
+		return nil, fmt.Errorf("unsupported model %q", requestedModel)
 	}
 	payload["model"] = model
 
@@ -153,6 +153,10 @@ func normalizeGLModel(model string) (canonical string, upstream string, ok bool)
 		return "deepseek-v3.1", "deepseek-v3.1", true
 	case "minimax-m2.7", "minimax2.7", "minimax-2.7", "minimax-m2-7":
 		return "minimax-m2.7", "minimax-m2.7", true
+	case "gpt-oss-120b":
+		return "gpt-oss-120b", "gpt-oss-120b", true
+	case "gemma-4-31b-it":
+		return "gemma-4-31B-it", "gemma-4-31B-it", true
 	default:
 		return "", "", false
 	}

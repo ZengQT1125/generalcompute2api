@@ -23,10 +23,12 @@ var GLModels = []ModelInfo{
 }
 
 func ResolveModel(requested string) (string, bool) {
-	requested = strings.ToLower(strings.TrimSpace(requested))
+	requested = strings.TrimSpace(requested)
+	if info, ok := OpenAIModelByID(requested); ok {
+		return info.ID, true
+	}
+	requested = strings.ToLower(requested)
 	switch requested {
-	case "deepseek-v3.2", "deepseek-v3.1", "minimax-m2.7", "gpt-oss-120b", "gemma-4-31B-it":
-		return requested, true
 	case "minimax2.7", "minimax-2.7", "minimax-m2-7":
 		return "minimax-m2.7", true
 	default:
@@ -39,9 +41,9 @@ func OpenAIModelsResponse() map[string]any {
 }
 
 func OpenAIModelByID(id string) (ModelInfo, bool) {
-	id = strings.ToLower(strings.TrimSpace(id))
+	id = strings.TrimSpace(id)
 	for _, model := range GLModels {
-		if model.ID == id {
+		if strings.EqualFold(model.ID, id) {
 			return model, true
 		}
 	}
