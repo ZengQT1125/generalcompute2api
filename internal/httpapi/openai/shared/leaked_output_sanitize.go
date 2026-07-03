@@ -24,6 +24,9 @@ var leakedSimpleToolCallObjectPattern = regexp.MustCompile(`(?is)\{\s*"function"
 // in the format [{"name":"...","arguments":{...}}] without the "function" wrapper.
 var leakedSimpleToolCallArrayPattern = regexp.MustCompile(`(?is)\[\s*\{\s*"name"\s*:\s*"[^"]*"\s*,\s*"arguments"\s*:\s*(\{.*\}|"[^"]*")\s*\}\s*\]`)
 
+// leakedGemmaToolCallBlockPattern matches Gemma 4's <|tool_call|>call:name{...}<tool_call|> blocks.
+var leakedGemmaToolCallBlockPattern = regexp.MustCompile(`(?is)<\|tool_call\|>\s*call\s*:\s*[a-z_][a-z0-9_]*\s*(\{(?:[^{}]|\{[^{}]*\})*\})\s*<tool_call\|>`)
+
 var leakedThinkTagPattern = regexp.MustCompile(`(?is)</?\s*think\s*>`)
 
 // leakedBOSMarkerPattern matches DeepSeek BOS markers in BOTH forms:
@@ -64,6 +67,7 @@ func sanitizeLeakedOutput(text string) string {
 	out = leakedMinimaxToolCallBlockPattern.ReplaceAllString(out, "")
 	out = leakedMinimaxToolCallLinePattern.ReplaceAllString(out, "")
 	out = leakedBareInvokeLinePattern.ReplaceAllString(out, "")
+	out = leakedGemmaToolCallBlockPattern.ReplaceAllString(out, "")
 	out = stripDanglingThinkSuffix(out)
 	out = leakedThinkTagPattern.ReplaceAllString(out, "")
 	out = leakedBOSMarkerPattern.ReplaceAllString(out, "")
@@ -166,4 +170,5 @@ func sanitizeLeakedAgentXMLBlocks(text string) string {
 	}
 	return out
 }
+
 

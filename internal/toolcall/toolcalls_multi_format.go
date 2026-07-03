@@ -39,7 +39,12 @@ func parseMultiFormatToolCalls(text string, availableToolNames []string) ([]Pars
 	}
 
 	// 5.5 尝试裸工具名 XML 格式
-	if calls, ok := parseBareToolNameXMLCalls(trimmed, availableToolNames); ok && len(calls) > 0 {
+		if calls, ok := parseBareToolNameXMLCalls(trimmed, availableToolNames); ok && len(calls) > 0 {
+		return calls, true
+	}
+
+	// 5.6 尝试 Gemma 4 的 <|tool_call|>call:name{...}<tool_call|> 格式
+	if calls, ok := parseGemmaToolCalls(trimmed, availableToolNames); ok && len(calls) > 0 {
 		return calls, true
 	}
 
@@ -712,3 +717,97 @@ func uniqueStrings(s []string) []string {
 	}
 	return out
 }
+
+
+
+// parseGemmaToolCalls 处理 Gemma 4 的 <|tool_call|>call:name{...}<tool_call|> 格式。
+// 这种格式的闭标签 <tool_call|> 没有 "/" 前缀，标准 XML/DSML 解析器无法识别。
+var gemmaToolCallBlockPattern = regexp.MustCompile(`(?is)<\|tool_call\|>\s*call\s*:\s*([a-z_][a-z0-9_]*)\s*(\{(?:[^{}]|\{[^{}]*\})*\})\s*<tool_call\|>`)
+
+func parseGemmaToolCalls(text string, availableToolNames []string) ([]ParsedToolCall, bool) {
+	if !strings.Contains(text, "<|tool_call|>") {
+		return nil, false
+	}
+	matches := gemmaToolCallBlockPattern.FindAllStringSubmatch(text, -1)
+	if len(matches) == 0 {
+		return nil, false
+	}
+	out := make([]ParsedToolCall, 0, len(matches))
+	for _, m := range matches {
+		if len(m) < 3 {
+			continue
+		}
+		name := strings.TrimSpace(m[1])
+		if name == "" {
+			continue
+		}
+		argsRaw := strings.TrimSpace(m[2])
+		input := parseGemmaArgs(argsRaw)
+		out = append(out, ParsedToolCall{Name: name, Input: input})
+	}
+	return out, len(out) > 0
+}
+
+func parseGemmaArgs(raw string) map[string]any {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "{}" {
+		return map[string]any{}
+	}
+	// 1. 尝试标准 JSON 解析
+	var parsed map[string]any
+	if err := json.Unmarshal([]byte(raw), &parsed); err == nil && parsed != nil {
+		return parsed
+	}
+	// 2. JSON 解析失败（常见原因是 key 没有引号），用简单键值对提取
+	inner := strings.TrimPrefix(strings.TrimSuffix(raw, "}"), "{")
+	inner = strings.TrimSpace(inner)
+	if inner == "" {
+		return map[string]any{}
+	}
+	out := map[string]any{}
+	// 用正则解析 key: value 对
+	kvPattern := regexp.MustCompile("(?s)([a-zA-Z_][a-zA-Z0-9_]*)\\s*:\\s*(\"(?:[^\"\\\\]|\\\\.)*\"|'[^']*'|\\d+(?:\\.\\d+)?|true|false|null|\\{(?:[^{}]|\\{[^{}]*\\})*\\}|\\[(?:[^\\[\\]]|\\[[^\\[\\]]*\\])*\\])")
+	for _, kv := range kvPattern.FindAllStringSubmatch(inner, -1) {
+		if len(kv) < 3 {
+			continue
+		}
+		key := strings.TrimSpace(kv[1])
+		valStr := strings.TrimSpace(kv[2])
+		if key == "" {
+			continue
+		}
+		out[key] = parseGemmaValue(valStr)
+	}
+	return out
+}
+
+func parseGemmaValue(valStr string) any {
+	// 字符串（带引号）
+	if (strings.HasPrefix(valStr, "\"") && strings.HasSuffix(valStr, "\"")) ||
+		(strings.HasPrefix(valStr, "'") && strings.HasSuffix(valStr, "'")) {
+		s := valStr[1 : len(valStr)-1]
+		s = strings.ReplaceAll(s, "\\\"", "\"")
+		s = strings.ReplaceAll(s, "\\'", "'")
+		s = strings.ReplaceAll(s, "\\\\", "\\")
+		return s
+	}
+	// null
+	if valStr == "null" {
+		return nil
+	}
+	// 布尔
+	if valStr == "true" {
+		return true
+	}
+	if valStr == "false" {
+		return false
+	}
+	// 数字
+	var num float64
+	if err := json.Unmarshal([]byte(valStr), &num); err == nil {
+		return num
+	}
+	// 对象/数组保持原始字符串
+	return valStr
+}
+

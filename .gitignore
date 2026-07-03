@@ -47,3 +47,6 @@ internal/server/data/
 
 # IDE
 *.code-workspace
+
+# Debug logs
+*.txt
