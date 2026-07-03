@@ -15,6 +15,15 @@ var leakedMinimaxToolCallBlockPattern = regexp.MustCompile(`(?is)(?:^|[\r\n])\s*
 var leakedMinimaxToolCallLinePattern = regexp.MustCompile(`(?im)^\s*minimaxtool_call\s*$`)
 var leakedBareInvokeLinePattern = regexp.MustCompile(`(?im)^\s*</?invoke\b[^>]*>\s*$`)
 
+// leakedSimpleToolCallObjectPattern matches single JSON tool call objects like
+// {"function":{"name":"...","arguments":{...}}} or {"name":"...","arguments":{...}}
+// that Gemma/other models may output inline.
+var leakedSimpleToolCallObjectPattern = regexp.MustCompile(`(?is)\{\s*"function"\s*:\s*\{\s*"name"\s*:\s*"[^"]*"\s*(?:,\s*"arguments"\s*:\s*(\{.*\}|"[^"]*")\s*)?\}\s*\}`)
+
+// leakedSimpleToolCallArrayPattern matches JSON arrays of tool call objects
+// in the format [{"name":"...","arguments":{...}}] without the "function" wrapper.
+var leakedSimpleToolCallArrayPattern = regexp.MustCompile(`(?is)\[\s*\{\s*"name"\s*:\s*"[^"]*"\s*,\s*"arguments"\s*:\s*(\{.*\}|"[^"]*")\s*\}\s*\]`)
+
 var leakedThinkTagPattern = regexp.MustCompile(`(?is)</?\s*think\s*>`)
 
 // leakedBOSMarkerPattern matches DeepSeek BOS markers in BOTH forms:
@@ -48,6 +57,8 @@ func sanitizeLeakedOutput(text string) string {
 	}
 	out := emptyJSONFencePattern.ReplaceAllString(text, "")
 	out = leakedToolCallArrayPattern.ReplaceAllString(out, "")
+	out = leakedSimpleToolCallObjectPattern.ReplaceAllString(out, "")
+	out = leakedSimpleToolCallArrayPattern.ReplaceAllString(out, "")
 	out = leakedToolResultBlobPattern.ReplaceAllString(out, "")
 	out = leakedSingularToolCallBlockPattern.ReplaceAllString(out, "")
 	out = leakedMinimaxToolCallBlockPattern.ReplaceAllString(out, "")
@@ -155,3 +166,4 @@ func sanitizeLeakedAgentXMLBlocks(text string) string {
 	}
 	return out
 }
+

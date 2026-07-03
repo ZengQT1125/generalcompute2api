@@ -44,3 +44,6 @@ internal/server/data/
 
 # Logs
 *.log
+
+# IDE
+*.code-workspace

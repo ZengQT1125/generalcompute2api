@@ -15,7 +15,9 @@ func BuildChatCompletionWithToolCalls(completionID, model, finalPrompt, finalThi
 	if len(detected) > 0 {
 		finishReason = "tool_calls"
 		messageObj["tool_calls"] = toolcall.FormatOpenAIToolCalls(detected, toolsRaw)
-		messageObj["content"] = nil
+		if strings.TrimSpace(finalText) == "" {
+			messageObj["content"] = nil
+		}
 	}
 
 	return map[string]any{

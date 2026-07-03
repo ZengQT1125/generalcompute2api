@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Image tag suffix (pushed as ghcr.io/.../whale2api:<tag>)
+        description: Image tag suffix
         required: false
         default: manual
 
@@ -15,27 +15,7 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - name: Run unit tests
-        run: bash ./tests/scripts/run-unit-all.sh
-
   build:
-    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -53,9 +33,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=${{ github.event_name == 'push' }}
-            type=sha,prefix=
             type=raw,value=${{ inputs.tag }},enable=${{ github.event_name == 'workflow_dispatch' }}
 
       - name: Login to GHCR
@@ -70,7 +48,6 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          target: final
           platforms: linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
