@@ -34,6 +34,15 @@ func TestSanitizeLeakedOutputRemovesThinkAndBosMarkers(t *testing.T) {
 	}
 }
 
+func TestSanitizeLeakedOutputRemovesGemmaChannelMarkers(t *testing.T) {
+	raw := "我现在开始执行文件扫描。\n<|channel>thought\n<channel|>\n后续内容"
+	got := sanitizeLeakedOutput(raw)
+	want := "我现在开始执行文件扫描。\n\n后续内容"
+	if got != want {
+		t.Fatalf("unexpected sanitize result for Gemma channel markers: %q", got)
+	}
+}
+
 func TestSanitizeLeakedOutputRemovesDanglingThinkBlock(t *testing.T) {
 	raw := "Answer prefix<think>internal reasoning that never closes"
 	got := sanitizeLeakedOutput(raw)

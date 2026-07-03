@@ -28,6 +28,7 @@ var leakedSimpleToolCallArrayPattern = regexp.MustCompile(`(?is)\[\s*\{\s*"name"
 var leakedGemmaToolCallBlockPattern = regexp.MustCompile(`(?is)<\|tool_call\|>\s*call\s*:\s*[a-z_][a-z0-9_]*\s*(\{(?:[^{}]|\{[^{}]*\})*\})\s*<tool_call\|>`)
 
 var leakedThinkTagPattern = regexp.MustCompile(`(?is)</?\s*think\s*>`)
+var leakedGemmaChannelTagPattern = regexp.MustCompile(`(?is)<\|\s*channel\s*>\s*(?:analysis|commentary|final|thought)?\s*|<\s*channel\s*\|>`)
 
 // leakedBOSMarkerPattern matches DeepSeek BOS markers in BOTH forms:
 //   - ASCII underscore: <｜begin_of_sentence｜>
@@ -70,6 +71,7 @@ func sanitizeLeakedOutput(text string) string {
 	out = leakedGemmaToolCallBlockPattern.ReplaceAllString(out, "")
 	out = stripDanglingThinkSuffix(out)
 	out = leakedThinkTagPattern.ReplaceAllString(out, "")
+	out = leakedGemmaChannelTagPattern.ReplaceAllString(out, "")
 	out = leakedBOSMarkerPattern.ReplaceAllString(out, "")
 	out = leakedMetaMarkerPattern.ReplaceAllString(out, "")
 	out = stripLeakedToolCallWrapperBlocks(out)
@@ -170,5 +172,3 @@ func sanitizeLeakedAgentXMLBlocks(text string) string {
 	}
 	return out
 }
-
-

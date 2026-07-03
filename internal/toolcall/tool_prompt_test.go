@@ -119,6 +119,22 @@ func TestBuildToolCallInstructions_AnchorsMissingOpeningWrapperFailureMode(t *te
 	}
 }
 
+func TestBuildToolCallInstructions_AllowsGemmaToolCallFormat(t *testing.T) {
+	out := BuildToolCallInstructions([]string{"list_files"})
+	if !strings.Contains(out, "【格式 C — Gemma 兼容") {
+		t.Fatalf("expected Gemma format section, got: %s", out)
+	}
+	if !strings.Contains(out, `<|tool_call|>call:u_list_files{path: "."}<tool_call|>`) {
+		t.Fatalf("expected Gemma list_files example, got: %s", out)
+	}
+	if strings.Contains(out, "Never emit native tool syntax such as minimaxtool_call, <tool_call>") {
+		t.Fatalf("prompt should not forbid the Gemma tool_call format it supports: %s", out)
+	}
+	if !strings.Contains(out, "不要同时输出侦察计划、说明文字或 <|channel>thought") {
+		t.Fatalf("expected Gemma channel leakage guard, got: %s", out)
+	}
+}
+
 func findInvokeBlocks(text, name string) []string {
 	open := `<|QNML|invoke name="` + name + `">`
 	remaining := text

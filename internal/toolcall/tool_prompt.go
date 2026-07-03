@@ -14,6 +14,7 @@ func BuildToolCallInstructions(toolNames []string) string {
 	ivC := MarkupPipeCloseTag(MarkupTagInvoke)
 	paramPH := wrapParameter("PARAMETER_NAME", "<![CDATA[PARAMETER_VALUE]]>")
 	invokePH := MarkupPipeInvokeOpen("TOOL_NAME_HERE")
+	gemmaExample := buildGemmaToolExample(toolNames)
 
 	return `工具调用格式：
 
@@ -30,9 +31,10 @@ func BuildToolCallInstructions(toolNames []string) string {
     <parameter name="PARAMETER_NAME"><![CDATA[PARAMETER_VALUE]]></parameter>
   </invoke>
 </tool_calls>
+` + gemmaExample + `
 
 规则：
-1）优先使用 QNML 格式（` + tcO + `），也可使用标准 XML 格式（<tool_calls>），两种均能正常解析。
+1）优先使用 QNML 格式（` + tcO + `），也可使用标准 XML 格式（<tool_calls>）或 Gemma 格式（<|tool_call|>），三种均能正常解析。
 2）在根节点下放置一个或多个 ` + MarkupPipeOpenTag(MarkupTagInvoke) + `（QNML）或 <invoke>（标准 XML）。
 3）工具名称写在 name 属性中：` + MarkupPipeInvokeOpen("TOOL_NAME") + ` 或 <invoke name="TOOL_NAME">。
 4）所有字符串值必须使用 <![CDATA[...]]>，包括很短的值；代码、脚本、文件内容、提示词、路径、名称、查询等均适用。
@@ -41,10 +43,10 @@ func BuildToolCallInstructions(toolNames []string) string {
 7）数字、布尔值与 null 使用纯文本，不用 CDATA。
 8）只能使用工具 schema 中声明的参数名，禁止臆造字段。
 9）不要用 Markdown 代码围栏包裹 XML；不要输出解释性说明、角色标记或内心独白。
-10）若调用工具，该工具块的首个非空白字符必须恰好是根标签（` + tcO + ` 或 <tool_calls>）。
+10）若调用工具，该工具块的首个非空白字符必须恰好是工具调用标签（` + tcO + `、<tool_calls> 或 <|tool_call|>）。
 11）即使随后会闭合关闭标签，也禁止省略开头的根标签。
 12）禁止输出 minimaxtool_call 或任何非标准前缀。
-13）两种格式均可正常解析，按需选用即可。
+13）如果你是 Gemma 系列模型并更容易输出原生工具调用，可使用格式 C，但不要同时输出侦察计划、说明文字或 <|channel>thought 等角色/通道标记。
 14）禁止把 shell、powershell、bash、cmd 等命令写成 Markdown 代码围栏；代码围栏不会被视为工具调用。需要执行命令时必须输出工具调用标记块。
 
 参数形态：
@@ -69,11 +71,11 @@ func BuildToolCallInstructions(toolNames []string) string {
   Get-ChildItem -Force
   ` + "```" + `
 
-请记住：不要用文字描述你要执行的命令——直接输出工具调用标记块（QNML 或标准 XML 均可）。
+请记住：不要用文字描述你要执行的命令——直接输出工具调用标记块（QNML、标准 XML 或 Gemma 格式均可）。
 
 【Thinking 模型注意】（DeepSeek 3.2 等）：
 你的推理在思考块中完成，但最终输出必须在 content 中以工具调用格式呈现。
-不要在 content 中用自然语言描述命令——直接输出 <tool_calls> 或 ` + tcO + ` 标记块。
+不要在 content 中用自然语言描述命令——直接输出 <tool_calls>、` + tcO + ` 或 <|tool_call|> 标记块。
 即使你已在思考中想好了要用的命令，也必须在 content 中输出完整的工具调用块。
 
 ` + buildCorrectToolExamples(toolNames)
@@ -108,6 +110,69 @@ func buildCorrectToolExamples(toolNames []string) string {
 		return ""
 	}
 	return "【正确示例】：\n\n" + strings.Join(examples, "\n\n") + "\n\n"
+}
+
+func buildGemmaToolExample(toolNames []string) string {
+	example, ok := firstBasicExample(uniqueToolNames(toolNames))
+	if !ok {
+		return ""
+	}
+	params := gemmaExampleParams(example.params)
+	if params == "" {
+		params = "{}"
+	}
+	return `
+
+【格式 C — Gemma 兼容（Gemma 模型可选）】：
+<|tool_call|>call:` + example.name + params + `<tool_call|>
+`
+}
+
+func gemmaExampleParams(params string) string {
+	pairs := []string{}
+	for _, line := range strings.Split(params, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		nameStart := strings.Index(line, `name="`)
+		if nameStart < 0 {
+			continue
+		}
+		nameStart += len(`name="`)
+		nameEnd := strings.Index(line[nameStart:], `"`)
+		if nameEnd < 0 {
+			continue
+		}
+		name := line[nameStart : nameStart+nameEnd]
+		value := ""
+		cdataStart := strings.Index(line, "<![CDATA[")
+		cdataEnd := strings.LastIndex(line, "]]>")
+		if cdataStart >= 0 && cdataEnd > cdataStart {
+			value = line[cdataStart+len("<![CDATA[") : cdataEnd]
+		} else {
+			close := strings.Index(line, ">")
+			endTag := strings.LastIndex(line, "</")
+			if close >= 0 && endTag > close {
+				value = strings.TrimSpace(line[close+1 : endTag])
+			}
+		}
+		if name == "" {
+			continue
+		}
+		pairs = append(pairs, name+": "+quoteGemmaExampleValue(value))
+	}
+	if len(pairs) == 0 {
+		return "{}"
+	}
+	return "{" + strings.Join(pairs, ", ") + "}"
+}
+
+func quoteGemmaExampleValue(value string) string {
+	if value == "" {
+		return `""`
+	}
+	return `"` + strings.ReplaceAll(strings.ReplaceAll(value, `\`, `\\`), `"`, `\"`) + `"`
 }
 
 func uniqueToolNames(toolNames []string) []string {
