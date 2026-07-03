@@ -722,10 +722,10 @@ func uniqueStrings(s []string) []string {
 
 // parseGemmaToolCalls 处理 Gemma 4 的 <|tool_call|>call:name{...}<tool_call|> 格式。
 // 这种格式的闭标签 <tool_call|> 没有 "/" 前缀，标准 XML/DSML 解析器无法识别。
-var gemmaToolCallBlockPattern = regexp.MustCompile(`(?is)<\|tool_call\|>\s*call\s*:\s*([a-z_][a-z0-9_]*)\s*(\{(?:[^{}]|\{[^{}]*\})*\})\s*<tool_call\|>`)
+var gemmaToolCallBlockPattern = regexp.MustCompile(`(?is)<\|tool_call\|?>\s*call\s*:\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*(\{(?:[^{}]|\{[^{}]*\})*\})\s*<tool_call\|>`)
 
 func parseGemmaToolCalls(text string, availableToolNames []string) ([]ParsedToolCall, bool) {
-	if !strings.Contains(text, "<|tool_call|>") {
+	if !strings.Contains(text, "<|tool_call") {
 		return nil, false
 	}
 	matches := gemmaToolCallBlockPattern.FindAllStringSubmatch(text, -1)

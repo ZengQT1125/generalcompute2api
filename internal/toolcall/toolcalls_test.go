@@ -1055,3 +1055,31 @@ func TestParseToolCallsSupportsTextKVFormat(t *testing.T) {
 		t.Fatalf("expected val1, got %#v", calls[0].Input)
 	}
 }
+
+func TestParseToolCallsSupportsGemmaFormat(t *testing.T) {
+	text := `<|tool_call>call:list_files{path: "."}<tool_call|>`
+	calls := ParseToolCalls(text, []string{"list_files"})
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 call, got %#v", calls)
+	}
+	if calls[0].Name != "list_files" {
+		t.Fatalf("expected list_files, got %q", calls[0].Name)
+	}
+	if calls[0].Input["path"] != "." {
+		t.Fatalf("expected path to be ., got %#v", calls[0].Input)
+	}
+}
+
+func TestParseToolCallsSupportsGemmaFormatWithRightPipe(t *testing.T) {
+	text := `<|tool_call|>call:list_files{path: "."}<tool_call|>`
+	calls := ParseToolCalls(text, []string{"list_files"})
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 call, got %#v", calls)
+	}
+	if calls[0].Name != "list_files" {
+		t.Fatalf("expected list_files, got %q", calls[0].Name)
+	}
+	if calls[0].Input["path"] != "." {
+		t.Fatalf("expected path to be ., got %#v", calls[0].Input)
+	}
+}
