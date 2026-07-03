@@ -15,6 +15,19 @@ func TestBuildToolCallInstructions_ExecCommandUsesCmdExample(t *testing.T) {
 	}
 }
 
+func TestBuildToolCallInstructions_ShellCommandUsesCommandExample(t *testing.T) {
+	out := BuildToolCallInstructions([]string{"shell_command"})
+	if !strings.Contains(out, `<|QNML|invoke name="u_shell_command">`) {
+		t.Fatalf("expected shell_command in examples, got: %s", out)
+	}
+	if !strings.Contains(out, `<|QNML|parameter name="command"><![CDATA[Get-ChildItem -Force]]></|QNML|parameter>`) {
+		t.Fatalf("expected shell_command command parameter example, got: %s", out)
+	}
+	if !strings.Contains(out, `<|tool_call|>call:u_shell_command{command: "Get-ChildItem -Force"}<tool_call|>`) {
+		t.Fatalf("expected shell_command Gemma example, got: %s", out)
+	}
+}
+
 func TestBuildToolCallInstructions_ExecuteCommandUsesCommandExample(t *testing.T) {
 	out := BuildToolCallInstructions([]string{"execute_command"})
 	if !strings.Contains(out, `<|QNML|invoke name="u_execute_command">`) {

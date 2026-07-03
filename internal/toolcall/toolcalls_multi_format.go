@@ -39,7 +39,7 @@ func parseMultiFormatToolCalls(text string, availableToolNames []string) ([]Pars
 	}
 
 	// 5.5 尝试裸工具名 XML 格式
-		if calls, ok := parseBareToolNameXMLCalls(trimmed, availableToolNames); ok && len(calls) > 0 {
+	if calls, ok := parseBareToolNameXMLCalls(trimmed, availableToolNames); ok && len(calls) > 0 {
 		return calls, true
 	}
 
@@ -471,7 +471,6 @@ func parseTextKVToolCalls(text string, availableToolNames []string) ([]ParsedToo
 	}}, true
 }
 
-
 // parseBareToolNameXMLCalls 处理模型直接以工具名为 XML 标签名输出的格式：
 //
 //	<read_file>
@@ -665,7 +664,7 @@ func extractXMLBlockBody(block string) string {
 
 // removeFirstXMLBlock 移除文本中第一个 XML 块
 func removeFirstXMLBlock(text string) string {
-	// 找第一个 <tag> 
+	// 找第一个 <tag>
 	start := strings.Index(text, "<")
 	if start < 0 {
 		return ""
@@ -718,8 +717,6 @@ func uniqueStrings(s []string) []string {
 	return out
 }
 
-
-
 // parseGemmaToolCalls 处理 Gemma 4 的 <|tool_call|>call:name{...}<tool_call|> 格式。
 // 这种格式的闭标签 <tool_call|> 没有 "/" 前缀，标准 XML/DSML 解析器无法识别。
 var gemmaToolCallBlockPattern = regexp.MustCompile(`(?is)<\|tool_call\|?>\s*call\s*:\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*(\{(?:[^{}]|\{[^{}]*\})*\})\s*<tool_call\|>`)
@@ -743,9 +740,36 @@ func parseGemmaToolCalls(text string, availableToolNames []string) ([]ParsedTool
 		}
 		argsRaw := strings.TrimSpace(m[2])
 		input := parseGemmaArgs(argsRaw)
+		name, input = normalizeGemmaShellAlias(name, input, availableToolNames)
 		out = append(out, ParsedToolCall{Name: name, Input: input})
 	}
 	return out, len(out) > 0
+}
+
+func normalizeGemmaShellAlias(name string, input map[string]any, availableToolNames []string) (string, map[string]any) {
+	if strings.TrimSpace(canonicalToolName(name, availableToolNames)) != "" {
+		return name, input
+	}
+	if !strings.EqualFold(strings.TrimSpace(name), "ls") && !strings.EqualFold(strings.TrimSpace(name), "dir") {
+		return name, input
+	}
+	shellName := allowedToolName("shell_command", availableToolNames)
+	if shellName == "" {
+		return name, input
+	}
+	path := "."
+	if input != nil {
+		if rawPath, ok := input["path"].(string); ok && strings.TrimSpace(rawPath) != "" {
+			path = strings.TrimSpace(rawPath)
+		}
+	}
+	return shellName, map[string]any{
+		"command": "Get-ChildItem -Force -LiteralPath " + powershellSingleQuote(path),
+	}
+}
+
+func powershellSingleQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
 }
 
 func parseGemmaArgs(raw string) map[string]any {
@@ -810,4 +834,3 @@ func parseGemmaValue(valStr string) any {
 	// 对象/数组保持原始字符串
 	return valStr
 }
-

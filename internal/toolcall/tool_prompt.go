@@ -276,6 +276,8 @@ func exampleBasicParams(name string) (string, bool) {
 		return wrapParameter("command", promptCDATA("pwd")), true
 	case "exec_command":
 		return wrapParameter("cmd", promptCDATA("pwd")), true
+	case "shell_command":
+		return wrapParameter("command", promptCDATA("Get-ChildItem -Force")), true
 	case "Write":
 		return wrapParameter("file_path", promptCDATA("notes.txt")) + "\n" + wrapParameter("content", promptCDATA("Hello world")), true
 	case "write_to_file":
@@ -318,6 +320,8 @@ echo "literal dollar: $HOME"`
 		return wrapParameter("command", promptCDATA(scriptCommand)), true
 	case "exec_command":
 		return wrapParameter("cmd", promptCDATA(scriptCommand)), true
+	case "shell_command":
+		return wrapParameter("command", promptCDATA(scriptCommand)), true
 	case "Write":
 		return wrapParameter("file_path", promptCDATA("test_escape.sh")) + "\n" + wrapParameter("content", promptCDATA(scriptContent)), true
 	case "write_to_file":

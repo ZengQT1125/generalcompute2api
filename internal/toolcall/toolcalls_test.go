@@ -1083,3 +1083,20 @@ func TestParseToolCallsSupportsGemmaFormatWithRightPipe(t *testing.T) {
 		t.Fatalf("expected path to be ., got %#v", calls[0].Input)
 	}
 }
+
+func TestParseToolCallsGemmaLsAliasUsesShellCommand(t *testing.T) {
+	text := `<|tool_call>call:ls {path: "."}<tool_call|>`
+	calls := ParseToolCalls(text, []string{"shell_command"})
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 call, got %#v", calls)
+	}
+	if calls[0].Name != "shell_command" {
+		t.Fatalf("expected shell_command, got %q", calls[0].Name)
+	}
+	if calls[0].Input["command"] != "Get-ChildItem -Force -LiteralPath '.'" {
+		t.Fatalf("expected PowerShell directory listing command, got %#v", calls[0].Input)
+	}
+	if _, ok := calls[0].Input["path"]; ok {
+		t.Fatalf("expected path to be normalized away, got %#v", calls[0].Input)
+	}
+}

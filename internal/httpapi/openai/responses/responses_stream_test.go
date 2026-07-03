@@ -202,6 +202,43 @@ func TestHandleResponsesStreamEmitsDistinctToolCallIDsAcrossSeparateToolBlocks(t
 	}
 }
 
+func TestHandleResponsesStreamPromotesGemmaLsToolCall(t *testing.T) {
+	h := &Handler{}
+	req := httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	rec := httptest.NewRecorder()
+
+	b, _ := json.Marshal(map[string]any{
+		"p": "response/content",
+		"v": `<|tool_call>call:ls {path: "."}<tool_call|>`,
+	})
+	streamBody := "data: " + string(b) + "\n" + "data: [DONE]\n"
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(strings.NewReader(streamBody)),
+	}
+
+	h.handleResponsesStream(rec, req, resp, "owner-a", "resp_gemma_ls", "gemma-4-31B-it", "prompt", 0, false, false, []string{"shell_command"}, nil, promptcompat.DefaultToolChoicePolicy(), "")
+
+	body := rec.Body.String()
+	if strings.Contains(body, "event: response.output_text.delta") {
+		t.Fatalf("did not expect Gemma tool call to leak as text, body=%s", body)
+	}
+	payload, ok := extractSSEEventPayload(body, "response.function_call_arguments.done")
+	if !ok {
+		t.Fatalf("expected Gemma ls function call, body=%s", body)
+	}
+	if asString(payload["name"]) != "shell_command" {
+		t.Fatalf("expected shell_command function call, got %#v", payload)
+	}
+	args := map[string]any{}
+	if err := json.Unmarshal([]byte(asString(payload["arguments"])), &args); err != nil {
+		t.Fatalf("decode Gemma ls arguments failed: %v", err)
+	}
+	if args["command"] != "Get-ChildItem -Force -LiteralPath '.'" {
+		t.Fatalf("expected normalized PowerShell ls command, got %#v", args)
+	}
+}
+
 func TestHandleResponsesStreamRequiredToolChoiceFailure(t *testing.T) {
 	h := &Handler{}
 	req := httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
