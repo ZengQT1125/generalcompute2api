@@ -54,7 +54,7 @@ func NewApp() (*App, error) {
 	}
 	var glClient *glclient.Client
 	resolver := auth.NewResolver(store, func(ctx context.Context, acc config.Account) (string, error) {
-		return glClient.Login(ctx, acc)
+		return glClient.Login(glclient.WithMagicLinkAutoLogin(ctx), acc)
 	})
 	resolver.PoolDB = poolDB
 	config.Logger.Info("[pooldb] SQLite gateway pools enabled", "path", pooldb.DatabasePath())
