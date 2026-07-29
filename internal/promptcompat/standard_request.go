@@ -81,7 +81,7 @@ func (r StandardRequest) CompletionPayload(sessionID string) map[string]any {
 		"ref_file_ids":      refFileIDs,
 		"thinking_enabled":  r.Thinking,
 		"search_enabled":    r.Search,
-		"messages":          r.Messages,
+		"messages":          r.UpstreamMessages(),
 		"stream":            true, // Always force stream request to upstream to bypass rate limit and allow SSE collection
 		"model":             r.ResponseModel,
 	}
