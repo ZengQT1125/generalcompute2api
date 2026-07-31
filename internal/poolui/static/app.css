@@ -101,6 +101,25 @@ code {
   margin-top: 1px;
 }
 
+/* 顶栏右侧操作区（GitHub 图标 + 退出） */
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 纯图标按钮：正方形，去掉左右内边距 */
+.btn.icon-btn {
+  width: 32px;
+  padding: 0;
+  flex: 0 0 auto;
+  color: var(--fg);
+}
+
+.btn.icon-btn svg {
+  display: block;
+}
+
 /* 页面主布局 Layout */
 .layout {
   flex: 1;
