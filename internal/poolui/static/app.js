@@ -577,6 +577,8 @@ async function loadAccounts() {
 
 function filterAccounts(list) {
   if (state.tab === "discarded") return list.filter((a) => a.discarded);
+  // 仅看失败：最近一次测号中判定为失败（含网络异常 transport），且未自动作废的账号
+  if (state.tab === "failed") return list.filter((a) => state.lastFailedIds.includes(a.identifier));
   if (state.tab === "active") return list.filter((a) => !a.discarded);
   return list;
 }

@@ -18,6 +18,10 @@ import (
 
 const glProbeModel = "deepseek-v3.2"
 
+// probeMaxAttempts 是测号对话请求对网络瞬态错误（超时/抖动）的自动重试次数。
+// 提高可避免偶发网络超时被误判为账号失败；代价是单账号最坏多花一些等待时间。
+const probeMaxAttempts = 3
+
 type accountTestResult struct {
 	Identifier    string `json:"identifier"`
 	OK            bool   `json:"ok"`
@@ -185,7 +189,7 @@ func probeGLChat(ctx context.Context, gl *glclient.Client, identifier, jwt strin
 		"messages": []any{
 			map[string]any{"role": "user", "content": "ping"},
 		},
-	}, "", 1)
+	}, "", probeMaxAttempts)
 	if err != nil {
 		dbg("探测对话请求出错", "err", err)
 		return err
