@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -30,14 +31,83 @@ type App struct {
 	Resolver *auth.Resolver
 	GL       *glclient.Client
 	Router   http.Handler
+
+	keepAliveStop chan struct{}
+	keepAliveDone chan struct{}
 }
 
 // Close releases resources held by the app.
 func (a *App) Close() {
+	if a != nil && a.keepAliveStop != nil {
+		close(a.keepAliveStop)
+		<-a.keepAliveDone
+		a.keepAliveStop = nil
+	}
 	if a != nil && a.PoolDB != nil {
 		a.PoolDB.Close()
 		a.PoolDB = nil
 	}
+}
+
+// startKeepAlive launches the session keep-alive loop: it runs once at startup
+// for an immediate health check, then every day at the configured Beijing time
+// (default 04:00) it touches every pooled account so upstream sessions stay
+// fresh (滑动续期保鲜), even when real traffic only reaches a few accounts.
+func (a *App) startKeepAlive() {
+	a.keepAliveStop = make(chan struct{})
+	a.keepAliveDone = make(chan struct{})
+	at := a.Store.PoolKeepAliveAt()
+	go func() {
+		defer close(a.keepAliveDone)
+		config.Logger.Info("[keepalive] session keep-alive started", "at", at, "tz", "Asia/Shanghai (UTC+8)")
+		if a.Store.PoolKeepAliveRunOnStart() {
+			a.runKeepAliveOnce() // 启动体检：尽早恢复失效 session（可用 RUN_ON_START 关闭）
+		}
+		for {
+			next := nextKeepAliveAt(time.Now(), at)
+			config.Logger.Info("[keepalive] next round scheduled", "at", next.Format("2006-01-02 15:04:05 -0700"))
+			timer := time.NewTimer(time.Until(next))
+			select {
+			case <-a.keepAliveStop:
+				timer.Stop()
+				return
+			case <-timer.C:
+				a.runKeepAliveOnce()
+			}
+		}
+	}()
+}
+
+// beijingLocation is fixed UTC+8 (Asia/Shanghai has no DST), independent of the
+// server's system timezone / tzdata.
+var beijingLocation = time.FixedZone("CST", 8*3600)
+
+// nextKeepAliveAt returns the next occurrence of the HH:MM (Beijing time) after now.
+func nextKeepAliveAt(now time.Time, at string) time.Time {
+	hh, mm := 4, 0
+	if parts := strings.Split(at, ":"); len(parts) == 2 {
+		if h, err := strconv.Atoi(strings.TrimSpace(parts[0])); err == nil && h >= 0 && h <= 23 {
+			hh = h
+		}
+		if m, err := strconv.Atoi(strings.TrimSpace(parts[1])); err == nil && m >= 0 && m <= 59 {
+			mm = m
+		}
+	}
+	next := time.Date(now.Year(), now.Month(), now.Day(), hh, mm, 0, 0, beijingLocation)
+	if !next.After(now) {
+		next = next.AddDate(0, 0, 1)
+	}
+	return next
+}
+
+func (a *App) runKeepAliveOnce() {
+	if a == nil || a.Resolver == nil || a.GL == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Minute)
+	defer cancel()
+	n := a.Resolver.KeepAliveOnce(ctx, a.GL.KeepAliveCompletion)
+	config.Logger.Info("[keepalive] round finished", "touched_accounts", n)
 }
 
 func NewApp() (*App, error) {
@@ -58,8 +128,6 @@ func NewApp() (*App, error) {
 	})
 	resolver.PoolDB = poolDB
 	config.Logger.Info("[pooldb] SQLite gateway pools enabled", "path", pooldb.DatabasePath())
-	_ = poolDB.CleanLegacyGatewayKeys(context.Background())
-	config.Logger.Info("[pooldb] cleaned legacy gateway keys and bindings to ensure complete purity")
 	glClient = glclient.NewClient(store, resolver)
 
 	// 初始化合并 of poolui 服务进程
@@ -126,7 +194,11 @@ func NewApp() (*App, error) {
 	r.Post("/embeddings", embeddingsHandler.Embeddings)
 	r.NotFound(http.NotFound)
 
-	return &App{Store: store, PoolDB: poolDB, Resolver: resolver, GL: glClient, Router: r}, nil
+	app := &App{Store: store, PoolDB: poolDB, Resolver: resolver, GL: glClient, Router: r}
+	if store.PoolKeepAliveEnabled() {
+		app.startKeepAlive()
+	}
+	return app, nil
 }
 
 func timeout(d time.Duration) func(http.Handler) http.Handler {

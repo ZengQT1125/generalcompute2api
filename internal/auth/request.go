@@ -50,7 +50,7 @@ type Resolver struct {
 	tokenRefreshedAt map[string]time.Time
 	cooldownUntil    map[string]time.Time
 	poolMu           sync.Mutex
-	poolsByAPIKey    map[string]*account.Pool
+	pool             *account.Pool
 }
 
 func NewResolver(store *config.Store, login LoginFunc) *Resolver {
@@ -59,7 +59,7 @@ func NewResolver(store *config.Store, login LoginFunc) *Resolver {
 		Login:            login,
 		tokenRefreshedAt: map[string]time.Time{},
 		cooldownUntil:    map[string]time.Time{},
-		poolsByAPIKey:    map[string]*account.Pool{},
+		pool:             nil,
 	}
 }
 
@@ -80,7 +80,7 @@ func (r *Resolver) MarkAccountCooldown(accountID string, duration time.Duration)
 	}
 	r.cooldownUntil[accountID] = time.Now().Add(duration)
 	r.mu.Unlock()
-	r.removeAccountFromCachedPools(accountID)
+	r.removeAccountFromSharedPool(accountID)
 	config.Logger.Warn("[pool] account entered cooldown due to 429", "account", accountID, "duration", duration)
 }
 
@@ -157,42 +157,35 @@ func (r *Resolver) authFromPoolDB(ctx context.Context, callerKey, callerID, targ
 	if len(accounts) == 0 {
 		return nil, ErrNoAccount
 	}
-	subPool := r.sharedPoolForAPIKey(callerKey, accounts)
+	subPool := r.sharedPool(accounts)
 	return r.acquireManagedRequestAuth(ctx, callerID, target, subPool, true)
 }
 
-func (r *Resolver) sharedPoolForAPIKey(apiKey string, accounts []config.Account) *account.Pool {
-	apiKey = strings.TrimSpace(apiKey)
-	if r == nil || apiKey == "" {
+// sharedPool returns the single shared account pool. All API keys authenticate to
+// the same pool because the gateway is single-key (only the admin token is accepted).
+func (r *Resolver) sharedPool(accounts []config.Account) *account.Pool {
+	if r == nil {
 		return account.NewPoolWithRuntime(account.NewMemoryLookup(accounts), nil)
 	}
 	r.poolMu.Lock()
 	defer r.poolMu.Unlock()
-	if r.poolsByAPIKey == nil {
-		r.poolsByAPIKey = map[string]*account.Pool{}
-	}
-	if p := r.poolsByAPIKey[apiKey]; p != nil {
+	if p := r.pool; p != nil {
 		p.SyncAccounts(accounts)
 		return p
 	}
 	p := account.NewPoolWithRuntime(account.NewMemoryLookup(accounts), r.Store)
-	r.poolsByAPIKey[apiKey] = p
+	r.pool = p
 	return p
 }
 
-func (r *Resolver) removeAccountFromCachedPools(accountID string) {
+func (r *Resolver) removeAccountFromSharedPool(accountID string) {
 	if r == nil || accountID == "" {
 		return
 	}
 	r.poolMu.Lock()
-	pools := make([]*account.Pool, 0, len(r.poolsByAPIKey))
-	for _, p := range r.poolsByAPIKey {
-		if p != nil {
-			pools = append(pools, p)
-		}
-	}
+	p := r.pool
 	r.poolMu.Unlock()
-	for _, p := range pools {
+	if p != nil {
 		p.RemoveAccount(accountID)
 	}
 }

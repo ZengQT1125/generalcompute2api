@@ -122,13 +122,8 @@ func limitAccounts(accounts []config.Account) []config.Account {
 	return accounts[:max]
 }
 
-// CleanLegacyGatewayKeys deletes all keys and bindings from the DB except the default one.
-func (db *DB) CleanLegacyGatewayKeys(ctx context.Context) error {
-	if err := db.configured(); err != nil {
-		return err
-	}
-	// 物理清空除 default 之外的全部历史死数据，保持单号池架构的最高纯净度！
-	_, _ = db.sql.ExecContext(ctx, "DELETE FROM gateway_api_keys WHERE api_key != 'default'")
-	_, _ = db.sql.ExecContext(ctx, "DELETE FROM pool_bindings WHERE api_key != 'default'")
-	return nil
-}
+// CleanLegacyGatewayKeys was previously used to delete all gateway keys and
+// bindings except 'default' at startup. The gateway is now single-key (only the
+// admin token authenticates), so there is nothing to clean up: removing this
+// call preserves any rows the admin UI manages.
+

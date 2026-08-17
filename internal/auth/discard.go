@@ -61,7 +61,7 @@ func (r *Resolver) applyAutoDiscard(ctx context.Context, a *RequestAuth, reason 
 		return false
 	}
 	config.Logger.Info("[pool] auto-discarded account", "api_key", apiKey, "account", ident, "reason", reason)
-	r.removeAccountFromCachedPools(ident)
+	r.removeAccountFromSharedPool(ident)
 	if a.TriedAccounts == nil {
 		a.TriedAccounts = map[string]bool{}
 	}

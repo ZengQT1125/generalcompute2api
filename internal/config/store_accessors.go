@@ -111,6 +111,36 @@ func (s *Store) RuntimeTokenRefreshIntervalHours() int {
 	return 6
 }
 
+// PoolKeepAliveEnabled reports whether the session keep-alive background job is on.
+// It periodically touches every pooled account so upstream sessions stay active
+// (滑动续期保鲜), even when real traffic only reaches a few accounts.
+func (s *Store) PoolKeepAliveEnabled() bool {
+	raw, ok := os.LookupEnv("GENERALCOMPUTE2API_POOL_KEEPALIVE_ENABLED")
+	if !ok || strings.TrimSpace(raw) == "" {
+		return true // 默认开启
+	}
+	return parseBoolEnv(raw)
+}
+
+// PoolKeepAliveAt returns the daily Beijing-time (UTC+8) HH:MM at which the
+// keep-alive job runs. Default is 04:00 (凌晨 4 点).
+func (s *Store) PoolKeepAliveAt() string {
+	if raw := strings.TrimSpace(os.Getenv("GENERALCOMPUTE2API_POOL_KEEPALIVE_AT")); raw != "" {
+		return raw
+	}
+	return "04:00"
+}
+
+// PoolKeepAliveRunOnStart reports whether the keep-alive job runs one round
+// immediately at service startup (启动体检, default on).
+func (s *Store) PoolKeepAliveRunOnStart() bool {
+	raw, ok := os.LookupEnv("GENERALCOMPUTE2API_POOL_KEEPALIVE_RUN_ON_START")
+	if !ok || strings.TrimSpace(raw) == "" {
+		return true
+	}
+	return parseBoolEnv(raw)
+}
+
 func (s *Store) AutoDeleteSessions() bool {
 	return s.AutoDeleteMode() != "none"
 }

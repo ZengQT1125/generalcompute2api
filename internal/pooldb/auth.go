@@ -15,19 +15,22 @@ var (
 	ErrAPIKeyDisabled = errors.New("api key is disabled")
 )
 
-// GatewayKeyExists reports whether the key is registered (ignores enabled flag).
+// adminTokenValue returns the single gateway/admin key. The gateway is
+// single-key by design: only this token authenticates API calls and the admin UI.
+func adminTokenValue() string {
+	if t := config.AdminTokenFromEnv(); t != "" {
+		return t
+	}
+	return "change-me-pool-ui"
+}
+
+// GatewayKeyExists reports whether the key is the single admin token.
 func (db *DB) GatewayKeyExists(ctx context.Context, apiKey string) (bool, error) {
 	apiKey = strings.TrimSpace(apiKey)
 	if apiKey == "" {
 		return false, nil
 	}
-
-	// 检查是否是超级 admin token，仅允许超级 Admin Token 充当唯一调用凭证！
-	adminToken := config.AdminTokenFromEnv()
-	if adminToken == "" {
-		adminToken = "change-me-pool-ui"
-	}
-	return apiKey == adminToken, nil
+	return apiKey == adminTokenValue(), nil
 }
 
 // LoadAccountsForAPIKey returns the DeepSeek account pool bound to apiKey (enabled keys only).
@@ -37,13 +40,8 @@ func (db *DB) LoadAccountsForAPIKey(ctx context.Context, apiKey string) ([]confi
 		return nil, ErrInvalidAPIKey
 	}
 
-	// 检查是否是超级 admin token
-	adminToken := config.AdminTokenFromEnv()
-	if adminToken == "" {
-		adminToken = "change-me-pool-ui"
-	}
-
-	if apiKey != adminToken {
+	// 检查是否是唯一的 admin token（单 key 设计）
+	if apiKey != adminTokenValue() {
 		return nil, ErrInvalidAPIKey
 	}
 
