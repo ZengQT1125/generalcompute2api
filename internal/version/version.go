@@ -8,7 +8,7 @@ import (
 // BuildVersion can be injected at build time via -ldflags.
 // In release builds it should come from Git tag (e.g. v2.3.5).
 
-var BuildVersion = "v2.10.15"
+var BuildVersion = "v2.11.1"
 
 func normalize(v string) string {
 	v = strings.TrimSpace(v)
