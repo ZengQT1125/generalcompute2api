@@ -33,6 +33,76 @@
   --font-mono: 'Geist Mono', ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
 }
 
+/* ===== 深色模式 ===== */
+:root[data-theme="dark"] {
+  --bg: #0d1017;
+  --surface: rgba(24,28,40,.62);
+  --surface2: rgba(255,255,255,.06);
+  --surface-solid: rgba(26,30,44,.88);
+  --border: rgba(255,255,255,.14);
+  --border2: rgba(255,255,255,.07);
+  --fg: #e8eaf2;
+  --fg-muted: #9aa1b5;
+  --fg-subtle: #5f6579;
+  --accent: #4d8dff;
+  --accent-hover: #6ea1ff;
+  --accent-soft: rgba(77,141,255,.18);
+  --success: #3ecf6e;
+  --success-bg: rgba(62,207,110,.16);
+  --error: #ff6b61;
+  --error-bg: rgba(255,107,97,.14);
+  --warn: #f5a623;
+  --warn-bg: rgba(245,166,35,.16);
+  --info: #4d8dff;
+  --info-bg: rgba(77,141,255,.18);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.3),0 2px 10px rgba(0,0,0,.25);
+  --shadow-md: 0 14px 36px rgba(0,0,0,.45),0 2px 8px rgba(0,0,0,.3);
+  --ring: 0 0 0 3px rgba(77,141,255,.28);
+  color-scheme: dark;
+}
+
+:root[data-theme="dark"] body {
+  background: radial-gradient(1100px 720px at 6% -10%, rgba(77,141,255,.14), transparent 55%),
+              radial-gradient(960px 680px at 110% 8%, rgba(120,86,255,.12), transparent 55%),
+              radial-gradient(1000px 760px at 45% 118%, rgba(0,190,180,.08), transparent 55%),
+              radial-gradient(640px 480px at 88% 82%, rgba(255,150,30,.07), transparent 60%),
+              var(--bg);
+}
+
+:root[data-theme="dark"] .topbar {
+  background: rgba(13,16,23,.6);
+  border-bottom-color: rgba(255,255,255,.08);
+  box-shadow: 0 1px 0 rgba(255,255,255,.04);
+}
+
+:root[data-theme="dark"] .panel,
+:root[data-theme="dark"] .dialog-card,
+:root[data-theme="dark"] .toast {
+  border-color: rgba(255,255,255,.1);
+}
+
+:root[data-theme="dark"] .btn { background: rgba(255,255,255,.06); }
+:root[data-theme="dark"] .btn.primary { background: var(--accent); }
+:root[data-theme="dark"] .btn.ghost { background: transparent; }
+:root[data-theme="dark"] .btn.danger { background: rgba(255,255,255,.06); }
+
+:root[data-theme="dark"] .field input,
+:root[data-theme="dark"] .pagination-size select {
+  background: rgba(255,255,255,.06);
+}
+
+:root[data-theme="dark"] th { background: rgba(255,255,255,.04); }
+:root[data-theme="dark"] tbody tr:hover td { background: rgba(255,255,255,.05); }
+:root[data-theme="dark"] .row-fail { background: rgba(255,107,97,.05); }
+:root[data-theme="dark"] .row-ok { background: rgba(62,207,110,.05); }
+:root[data-theme="dark"] .test-progress-track { background: rgba(255,255,255,.1); }
+:root[data-theme="dark"] .dialog::backdrop { background: rgba(0,0,0,.55); }
+
+/* 主题切换按钮图标：浅色显示月亮，深色显示太阳 */
+#btnTheme .icon-sun { display: none; }
+:root[data-theme="dark"] #btnTheme .icon-sun { display: block; }
+:root[data-theme="dark"] #btnTheme .icon-moon { display: none; }
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {

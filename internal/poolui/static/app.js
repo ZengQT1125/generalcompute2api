@@ -1,4 +1,16 @@
 const TOKEN_KEY = "pool_ui_token";
+const THEME_KEY = "pool_ui_theme";
+
+// 深色模式切换：持久化到 localStorage，未设置时跟随系统
+(function initTheme() {
+  const btn = document.getElementById("btnTheme");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    localStorage.setItem(THEME_KEY, next);
+  });
+})();
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
